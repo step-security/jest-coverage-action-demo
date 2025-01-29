@@ -1,0 +1,22 @@
+name: 'coverage'
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run Jest Coverage Report
+        uses: step-security/jest-coverage-report-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          output: report-markdown  # Generate markdown output without attaching a comment
+
+      - name: Output Jest Coverage Result
+        run: echo "${{ steps.coverage.outputs.report }}"  # Output the coverage report in markdown format
