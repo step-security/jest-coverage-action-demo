@@ -10,12 +10,11 @@ on:
       base_branch:
         description: "Specify a base branch"
         required: false
-        type: string
         default: "main"
 
 jobs:
   audit-fix:
-    uses: step-security/reusable-workflows/.github/workflows/npm_audit_fix.yml@fix_Audit-Fix-Workflow
+    uses: step-security/reusable-workflows/.github/workflows/npm_audit_fix.yml@v1
     with:
       force: ${{ inputs.force }}
       base_branch: ${{ inputs.base_branch }}
