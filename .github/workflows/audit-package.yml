@@ -120,11 +120,15 @@ jobs:
         if: env.changes == 'true'
         run: |
           echo "Creating a pull request..."
+          
+          ESCAPED_TITLE=$(echo "${{ env.PR_TITLE }}" | jq -Rsa .)
+          ESCAPED_BODY=$(echo "${{ env.PR_BODY }}" | jq -Rsa .)
+
           API_RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             -d "{
-              \"title\": \"${{ env.PR_TITLE }}\",
-              \"body\": \"${{ env.PR_BODY }}\",
+              \"title\": $ESCAPED_TITLE,
+              \"body\": $ESCAPED_BODY,
               \"head\": \"${{ env.BRANCH_NAME }}\",
               \"base\": \"${{ inputs.base_branch }}\",
               \"draft\": false
@@ -140,3 +144,4 @@ jobs:
           else
             echo "✅ Pull Request created: $PR_URL"
           fi
+
