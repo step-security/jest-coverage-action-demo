@@ -68,9 +68,8 @@ jobs:
           echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
           KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
 
-          echo -e "trust\n5\ny\nsave\n" | gpg --batch --command-fd 0 --edit-key $KEY_ID
+          echo "$KEY_ID:6:" | gpg --import-ownertrust
 
-          # Configure Git to use signed commits
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global commit.gpgsign true
