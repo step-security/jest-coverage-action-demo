@@ -119,15 +119,24 @@ jobs:
         if: env.changes == 'true'
         run: |
           echo "Creating a pull request..."
-          PR_RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          API_RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             -d "{
               \"title\": \"NPM Audit Fix Updates\",
               \"body\": \"Automated PR to update dependencies with npm audit fix\",
-              \"head\": \"${{ env.branch }}\",
+              \"head\": \"${{ env.BRANCH_NAME }}\",
               \"base\": \"${{ inputs.base_branch }}\",
               \"draft\": false
             }" "https://api.github.com/repos/${{ github.repository }}/pulls")
 
-          PR_URL=$(echo "$PR_RESPONSE" | jq -r '.html_url')
-          echo "Pull Request created: $PR_URL"
+          echo "API Response: $API_RESPONSE"
+
+          PR_URL=$(echo "$API_RESPONSE" | jq -r '.html_url')
+
+          if [[ "$PR_URL" == "null" ]]; then
+            echo "❌ Error: PR creation failed. Check API response above."
+            exit 1
+          else
+            echo "✅ Pull Request created: $PR_URL"
+          fi
+
