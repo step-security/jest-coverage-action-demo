@@ -97,7 +97,7 @@ jobs:
           fi
 
           git checkout -b "$BRANCH_NAME"
-          git commit -S -m "$COMMIT_MESSAGE"  # ✅ Signed commit
+          git commit -S -m "$COMMIT_MESSAGE"  
           git push origin "$BRANCH_NAME"
 
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
