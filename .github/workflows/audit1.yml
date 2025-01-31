@@ -1,0 +1,112 @@
+name: NPM Audit Fix and PR1
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Use --force flag for npm audit fix?"
+        required: true
+        type: boolean
+      base_branch:
+        description: "Specify a base branch (default: main)"
+        required: false
+        type: string
+        default: "main"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  audit-fix:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit fix
+        run: |
+          if [ "${{ inputs.force }}" == "true" ]; then
+            npm audit fix --force || echo "No fixes needed"
+          else
+            npm audit fix || echo "No fixes needed"
+          fi
+
+      - name: Build Project
+        run: npm run build
+        
+      - name: Check for Changes
+        id: check_changes
+        run: |
+          git add .
+          if git diff --cached --exit-code; then
+            echo "No changes detected."
+            echo "changes=false" >> $GITHUB_ENV
+          else
+            echo "changes=true" >> $GITHUB_ENV
+          fi
+
+      - name: Get Latest Commit SHA from Main
+        id: get_sha
+        run: |
+          echo "Getting the latest commit SHA..."
+          SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/git/refs/heads/main | jq -r .object.sha)
+          echo "sha=$SHA" >> $GITHUB_ENV
+
+      - name: Create New Branch Using API
+        if: env.changes == 'true'
+        id: create_branch
+        run: |
+          BRANCH_NAME="npm-audit-fix-$(date +'%Y-%m-%d-%H-%M-%S')"
+          curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -d "{\"ref\":\"refs/heads/$BRANCH_NAME\", \"sha\":\"${{ env.sha }}\"}" \
+            https://api.github.com/repos/${{ github.repository }}/git/refs
+          echo "branch=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Commit Changes Using GitHub API
+        if: env.changes == 'true'
+        run: |
+          echo "Committing changes..."
+          FILES_CHANGED=$(git status --porcelain | awk '{print $2}')
+          for file in $FILES_CHANGED; do
+            CONTENT=$(base64 -w 0 $file)
+            FILENAME=$(basename $file)
+            SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              https://api.github.com/repos/${{ github.repository }}/contents/$file?ref=${{ env.branch }} | jq -r .sha)
+            if [ "$SHA" == "null" ]; then
+              SHA=""
+            fi
+            curl -s -X PUT -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -d "{\"message\":\"Update $FILENAME\", \"content\":\"$CONTENT\", \"branch\":\"${{ env.branch }}\", \"sha\":\"$SHA\"}" \
+              https://api.github.com/repos/${{ github.repository }}/contents/$file
+          done
+
+      - name: Create Pull Request Using API
+        if: env.changes == 'true'
+        run: |
+          echo "Creating a pull request..."
+          PR_RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d "{
+              \"title\": \"NPM Audit Fix Updates\",
+              \"body\": \"Automated PR to update dependencies with npm audit fix\",
+              \"head\": \"${{ env.branch }}\",
+              \"base\": \"${{ inputs.base_branch }}\",
+              \"draft\": false
+            }" "https://api.github.com/repos/${{ github.repository }}/pulls")
+
+          PR_URL=$(echo "$PR_RESPONSE" | jq -r '.html_url')
+          echo "Pull Request created: $PR_URL"
