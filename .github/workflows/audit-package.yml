@@ -22,11 +22,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
-        with:
-          egress-policy: audit
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -56,6 +51,7 @@ jobs:
         id: check_changes
         run: |
           git add .
+          
           if git diff --cached --exit-code; then
             echo "No changes detected."
             echo "changes=false" >> $GITHUB_ENV
@@ -63,59 +59,55 @@ jobs:
             echo "changes=true" >> $GITHUB_ENV
           fi
 
-      - name: Import GPG Key & Configure Git
+      - name: Get Latest Commit SHA from Main
+        id: get_sha
         run: |
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
-          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
+          echo "Getting the latest commit SHA..."
+          SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            https://api.github.com/repos/${{ github.repository }}/git/refs/heads/main | jq -r .object.sha)
+          echo "sha=$SHA" >> $GITHUB_ENV
 
-          echo "$KEY_ID:6:" | gpg --import-ownertrust
+      - name: Create New Branch Using API
+        if: env.changes == 'true'
+        id: create_branch
+        run: |
+          BRANCH_NAME="npm-audit-fix-$(date +'%Y-%m-%d-%H-%M-%S')"
+          curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -d "{\"ref\":\"refs/heads/$BRANCH_NAME\", \"sha\":\"${{ env.sha }}\"}" \
+            https://api.github.com/repos/${{ github.repository }}/git/refs
+          echo "branch=$BRANCH_NAME" >> $GITHUB_ENV
 
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global commit.gpgsign true
-          git config --global user.signingkey $KEY_ID
-
-      - name: Create Branch
+      - name: Commit Changes Using GitHub API
         if: env.changes == 'true'
         run: |
-          FORCE_MODE="${{ inputs.force }}"
-          BASE_BRANCH="${{ inputs.base_branch }}"
+          echo "Committing changes..."
+          FILES_CHANGED=$(git status --porcelain | awk '{print $2}')
+          for file in $FILES_CHANGED; do
+            CONTENT=$(base64 -w 0 $file)
+            FILENAME=$(basename $file)
+            SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              https://api.github.com/repos/${{ github.repository }}/contents/$file?ref=${{ env.branch }} | jq -r .sha)
+            if [ "$SHA" == "null" ]; then
+              SHA=""
+            fi
+            curl -s -X PUT -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -d "{\"message\":\"Update $FILENAME\", \"content\":\"$CONTENT\", \"branch\":\"${{ env.branch }}\", \"sha\":\"$SHA\"}" \
+              https://api.github.com/repos/${{ github.repository }}/contents/$file
+          done
 
-          if [ "$FORCE_MODE" == "true" ]; then
-            BRANCH_NAME="npm-audit-fix-force-$(date +'%Y-%m-%d-%H-%M-%S')"
-            COMMIT_MESSAGE="fix: apply npm audit fix --force"
-            PR_TITLE="fix: Security updates via npm audit fix --force"
-            PR_BODY="This PR applies security updates via \`npm audit fix --force\`."
-          else
-            BRANCH_NAME="npm-audit-fix-$(date +'%Y-%m-%d-%H-%M-%S')"
-            COMMIT_MESSAGE="fix: apply npm audit fix"
-            PR_TITLE="fix: Security updates via npm audit fix"
-            PR_BODY="This PR applies security updates via \`npm audit fix\`."
-          fi
-
-          git checkout -b "$BRANCH_NAME"
-          git commit -S -m "$COMMIT_MESSAGE"  
-          git push origin "$BRANCH_NAME"
-
-          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
-          echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
-          echo "PR_BODY=$PR_BODY" >> $GITHUB_ENV
-          echo "BASE_BRANCH=$BASE_BRANCH" >> $GITHUB_ENV
-
-      - name: Create Pull Request
+      - name: Create Pull Request Using API
         if: env.changes == 'true'
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const { data: pr } = await github.rest.pulls.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              head: process.env.BRANCH_NAME,
-              base: process.env.BASE_BRANCH,
-              title: process.env.PR_TITLE,
-              body: process.env.PR_BODY,
-              draft: false
-            });
+        run: |
+          echo "Creating a pull request..."
+          PR_RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d "{
+              \"title\": \"NPM Audit Fix Updates\",
+              \"body\": \"Automated PR to update dependencies with npm audit fix\",
+              \"head\": \"${{ env.branch }}\",
+              \"base\": \"${{ inputs.base_branch }}\",
+              \"draft\": false
+            }" "https://api.github.com/repos/${{ github.repository }}/pulls")
 
-            console.log(`Pull Request created: ${pr.html_url}`);
+          PR_URL=$(echo "$PR_RESPONSE" | jq -r '.html_url')
+          echo "Pull Request created: $PR_URL"
