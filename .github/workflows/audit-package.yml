@@ -51,7 +51,7 @@ jobs:
         id: check_changes
         run: |
           git add .
-          
+
           if git diff --cached --exit-code; then
             echo "No changes detected."
             echo "changes=false" >> $GITHUB_ENV
@@ -93,6 +93,7 @@ jobs:
             https://api.github.com/repos/${{ github.repository }}/git/refs
           
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+          echo "COMMIT_MESSAGE=$COMMIT_MESSAGE" >> $GITHUB_ENV
           echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
           echo "PR_BODY=$PR_BODY" >> $GITHUB_ENV
           echo "BASE_BRANCH=$BASE_BRANCH" >> $GITHUB_ENV
@@ -111,7 +112,7 @@ jobs:
               SHA=""
             fi
             curl -s -X PUT -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -d "{\"message\":\"$COMMIT_MESSAGE\", \"content\":\"$CONTENT\", \"branch\":\"${{ env.BRANCH_NAME }}\", \"sha\":\"$SHA\"}" \
+              -d "{\"message\":\"${{ env.COMMIT_MESSAGE }}\", \"content\":\"$CONTENT\", \"branch\":\"${{ env.BRANCH_NAME }}\", \"sha\":\"$SHA\"}" \
               https://api.github.com/repos/${{ github.repository }}/contents/$file
           done
 
@@ -122,8 +123,8 @@ jobs:
           API_RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             -d "{
-              \"title\": \"NPM Audit Fix Updates\",
-              \"body\": \"Automated PR to update dependencies with npm audit fix\",
+              \"title\": \"${{ env.PR_TITLE }}\",
+              \"body\": \"${{ env.PR_BODY }}\",
               \"head\": \"${{ env.BRANCH_NAME }}\",
               \"base\": \"${{ inputs.base_branch }}\",
               \"draft\": false
@@ -139,4 +140,3 @@ jobs:
           else
             echo "✅ Pull Request created: $PR_URL"
           fi
-
