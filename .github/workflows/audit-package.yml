@@ -64,15 +64,6 @@ jobs:
             echo "changes=true" >> $GITHUB_ENV
           fi
 
-      - name: Get Latest Commit SHA from Base Branch
-        if: env.changes == 'true'
-        id: get_sha
-        run: |
-          echo "Fetching the latest commit SHA from ${{ inputs.base_branch }}..."
-          SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/git/refs/heads/${{ inputs.base_branch }} | jq -r .object.sha)
-          echo "sha=$SHA" >> $GITHUB_ENV
-
       - name: Create New Branch
         if: env.changes == 'true'
         id: create_branch
@@ -84,14 +75,14 @@ jobs:
             BRANCH_NAME="npm-audit-fix-force-$(date +'%Y-%m-%d-%H-%M-%S')"
             COMMIT_MESSAGE="fix: apply npm audit fix --force"
             PR_TITLE="fix: Security updates via npm audit fix --force"
-            PR_BODY="This PR applies security updates via \`npm audit fix --force\`."
+            PR_BODY=$(printf "This PR applies security updates via \`npm audit fix --force\`.\n\nAll dependencies have been updated and audited.")
           else
             BRANCH_NAME="npm-audit-fix-$(date +'%Y-%m-%d-%H-%M-%S')"
             COMMIT_MESSAGE="fix: apply npm audit fix"
             PR_TITLE="fix: Security updates via npm audit fix"
-            PR_BODY="This PR applies security updates via \`npm audit fix\`."
+            PR_BODY=$(printf "This PR applies security updates via \`npm audit fix\`.\n\nAll dependencies have been updated and audited.")
           fi
-          
+
           echo "Creating a new branch: $BRANCH_NAME..."
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -d "{\"ref\":\"refs/heads/$BRANCH_NAME\", \"sha\":\"${{ env.sha }}\"}" \
