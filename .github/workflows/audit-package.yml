@@ -44,14 +44,10 @@ jobs:
             npm audit fix || echo "No fixes needed"
           fi
 
-      - name: Build Project
-        run: npm run build
-
       - name: Check for Changes
         id: check_changes
         run: |
           git add .
-          
           if git diff --cached --exit-code; then
             echo "No changes detected."
             echo "changes=false" >> $GITHUB_ENV
@@ -59,59 +55,39 @@ jobs:
             echo "changes=true" >> $GITHUB_ENV
           fi
 
-      - name: Get Latest Commit SHA from Base Branch
-        if: env.changes == 'true'
+      - name: Get Latest Commit SHA from Main
         id: get_sha
         run: |
-          echo "Fetching the latest commit SHA from ${{ inputs.base_branch }}..."
+          echo "Getting the latest commit SHA..."
           SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/git/refs/heads/${{ inputs.base_branch }} | jq -r .object.sha)
+            https://api.github.com/repos/${{ github.repository }}/git/refs/heads/main | jq -r .object.sha)
           echo "sha=$SHA" >> $GITHUB_ENV
 
-      - name: Create New Branch
+      - name: Create New Branch Using API
         if: env.changes == 'true'
         id: create_branch
         run: |
-          FORCE_MODE="${{ inputs.force }}"
-          BASE_BRANCH="${{ inputs.base_branch }}"
-
-          if [ "$FORCE_MODE" == "true" ]; then
-            BRANCH_NAME="npm-audit-fix-force-$(date +'%Y-%m-%d-%H-%M-%S')"
-            COMMIT_MESSAGE="fix: apply npm audit fix --force"
-            PR_TITLE="fix: Security updates via npm audit fix --force"
-            PR_BODY="This PR applies security updates via \`npm audit fix --force\`."
-          else
-            BRANCH_NAME="npm-audit-fix-$(date +'%Y-%m-%d-%H-%M-%S')"
-            COMMIT_MESSAGE="fix: apply npm audit fix"
-            PR_TITLE="fix: Security updates via npm audit fix"
-            PR_BODY="This PR applies security updates via \`npm audit fix\`."
-          fi
-
-          echo "Creating a new branch: $BRANCH_NAME..."
+          BRANCH_NAME="npm-audit-fix-$(date +'%Y-%m-%d-%H-%M-%S')"
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -d "{\"ref\":\"refs/heads/$BRANCH_NAME\", \"sha\":\"${{ env.sha }}\"}" \
             https://api.github.com/repos/${{ github.repository }}/git/refs
-          
-          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
-          echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
-          echo "PR_BODY=$PR_BODY" >> $GITHUB_ENV
-          echo "BASE_BRANCH=$BASE_BRANCH" >> $GITHUB_ENV
+          echo "branch=$BRANCH_NAME" >> $GITHUB_ENV
 
       - name: Commit Changes Using GitHub API
         if: env.changes == 'true'
         run: |
-          echo "Committing changes to $BRANCH_NAME..."
+          echo "Committing changes..."
           FILES_CHANGED=$(git status --porcelain | awk '{print $2}')
           for file in $FILES_CHANGED; do
             CONTENT=$(base64 -w 0 $file)
             FILENAME=$(basename $file)
             SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              https://api.github.com/repos/${{ github.repository }}/contents/$file?ref=${{ env.BRANCH_NAME }} | jq -r .sha)
+              https://api.github.com/repos/${{ github.repository }}/contents/$file?ref=${{ env.branch }} | jq -r .sha)
             if [ "$SHA" == "null" ]; then
               SHA=""
             fi
             curl -s -X PUT -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -d "{\"message\":\"$COMMIT_MESSAGE\", \"content\":\"$CONTENT\", \"branch\":\"${{ env.BRANCH_NAME }}\", \"sha\":\"$SHA\"}" \
+              -d "{\"message\":\"Update $FILENAME\", \"content\":\"$CONTENT\", \"branch\":\"${{ env.branch }}\", \"sha\":\"$SHA\"}" \
               https://api.github.com/repos/${{ github.repository }}/contents/$file
           done
 
