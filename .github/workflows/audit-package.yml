@@ -140,6 +140,7 @@ jobs:
           echo "Creating a pull request..."
           
           ESCAPED_TITLE=$(echo "${{ env.PR_TITLE }}" | jq -Rsa .)
+          ESCAPED_BODY=$(echo "${{ env.PR_BODY }}" | jq -Rsa .)
 
           API_RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
