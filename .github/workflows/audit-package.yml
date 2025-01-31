@@ -44,6 +44,9 @@ jobs:
             npm audit fix || echo "No fixes needed"
           fi
 
+      - name: Build Project
+        run: npm run build
+        
       - name: Check for Changes
         id: check_changes
         run: |
