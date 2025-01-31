@@ -1,7 +1,7 @@
 name: NPM Audit Fix and PR
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       force:
         description: "Use --force flag for npm audit fix?"
