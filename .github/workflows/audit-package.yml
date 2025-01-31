@@ -84,12 +84,12 @@ jobs:
             BRANCH_NAME="npm-audit-fix-force-$(date +'%Y-%m-%d-%H-%M-%S')"
             COMMIT_MESSAGE="fix: apply npm audit fix --force"
             PR_TITLE="fix: Security updates via npm audit fix --force"
-            PR_BODY=$(echo "This PR applies security updates via \`npm audit fix --force\`.")
+            PR_BODY=$(echo "This PR applies security updates via npm audit fix --force.")
           else
             BRANCH_NAME="npm-audit-fix-$(date +'%Y-%m-%d-%H-%M-%S')"
             COMMIT_MESSAGE="fix: apply npm audit fix"
             PR_TITLE="fix: Security updates via npm audit fix"
-            PR_BODY=$(echo "This PR applies security updates via \`npm audit fix\`.")
+            PR_BODY=$(echo "This PR applies security updates via npm audit fix.")
           fi
           echo "Creating a new branch: $BRANCH_NAME..."
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
