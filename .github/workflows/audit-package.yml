@@ -64,13 +64,12 @@ jobs:
           fi
 
       - name: Import GPG Key & Configure Git
-        if: env.changes == 'true'
         run: |
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
           KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
 
           # Trust the imported key
-          echo -e "5\ny\n" | gpg --command-fd 0 --edit-key $KEY_ID trust
+          echo -e "5\ny\n" | gpg --batch --yes --command-fd 0 --edit-key $KEY_ID trust
 
           # Configure Git to use signed commits
           git config --global user.name "github-actions[bot]"
