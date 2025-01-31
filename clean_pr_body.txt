@@ -1,0 +1,1 @@
+This PR applies security updates via `npm audit fix`.
