@@ -28,12 +28,12 @@ jobs:
           egress-policy: audit
 
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Set up Node.js
-        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
@@ -56,13 +56,27 @@ jobs:
         id: check_changes
         run: |
           git add .
-          
           if git diff --cached --exit-code; then
             echo "No changes detected."
             echo "changes=false" >> $GITHUB_ENV
           else
             echo "changes=true" >> $GITHUB_ENV
           fi
+
+      - name: Import GPG Key & Configure Git
+        if: env.changes == 'true'
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import
+          KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
+
+          # Trust the imported key
+          echo -e "5\ny\n" | gpg --command-fd 0 --edit-key $KEY_ID trust
+
+          # Configure Git to use signed commits
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global commit.gpgsign true
+          git config --global user.signingkey $KEY_ID
 
       - name: Create Branch
         if: env.changes == 'true'
@@ -83,7 +97,7 @@ jobs:
           fi
 
           git checkout -b "$BRANCH_NAME"
-          git commit -m "$COMMIT_MESSAGE"
+          git commit -S -m "$COMMIT_MESSAGE"  # ✅ Signed commit
           git push origin "$BRANCH_NAME"
 
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
