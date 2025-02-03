@@ -1,4 +1,5 @@
 name: NPM Audit Fix and PR
+
 on:
   workflow_dispatch:
     inputs:
@@ -11,9 +12,11 @@ on:
         required: false
         type: string
         default: "main"
+
 permissions:
   contents: write
   pull-requests: write
+
 jobs:
   audit-fix:
     runs-on: ubuntu-latest
@@ -22,17 +25,21 @@ jobs:
         uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e # v2.10.4
         with:
           egress-policy: audit
+
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+
       - name: Set up Node.js
         uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
           node-version: "20"
-          cache: "npm"
+          cache: npm
+
       - name: Install dependencies
         run: npm ci
+
       - name: Run npm audit fix
         run: |
           if [ "${{ inputs.force }}" == "true" ]; then
@@ -40,34 +47,35 @@ jobs:
           else
             npm audit fix || echo "No fixes needed"
           fi
+
       # -------------------------------
       # New Steps: Check for internal vulnerabilities and act accordingly
       # -------------------------------
-     - name: Check for internal vulnerabilities in npm
-  id: check_internal_vuln
-  run: |
-    echo "Running npm audit to check for internal vulnerabilities..."
-    # Run npm audit in JSON mode and store the output in audit.json.
-    # Append '|| true' so that the command doesn't fail the step.
-    npm audit --json > audit.json || true
-    # Check if the vulnerability report mentions npm's internal dependency path
-    if grep -q "node_modules/npm/node_modules" audit.json; then
-      echo "Internal vulnerability detected in npm dependencies."
-      echo "internal_vuln=true" >> $GITHUB_ENV
-    else
-      echo "No internal vulnerabilities detected."
-      echo "internal_vuln=false" >> $GITHUB_ENV
-    fi
+      - name: Check for internal vulnerabilities in npm
+        id: check_internal_vuln
+        run: |
+          echo "Running npm audit to check for internal vulnerabilities..."
+          # Run npm audit in JSON mode and store the output in audit.json.
+          # Append '|| true' so that the command doesn't fail the step.
+          npm audit --json > audit.json || true
+          # Check if the vulnerability report mentions npm's internal dependency path
+          if grep -q "node_modules/npm/node_modules" audit.json; then
+            echo "Internal vulnerability detected in npm dependencies."
+            echo "internal_vuln=true" >> $GITHUB_ENV
+          else
+            echo "No internal vulnerabilities detected."
+            echo "internal_vuln=false" >> $GITHUB_ENV
+          fi
 
       - name: Update npm if internal vulnerability is detected
         if: env.internal_vuln == 'true'
         run: |
           echo "Updating npm because an internal vulnerability was detected..."
           npm install -g npm@latest
-      # -------------------------------
-      
+
       - name: Build Project
         run: npm run build
+
       - name: Check for Changes
         id: check_changes
         run: |
@@ -78,6 +86,7 @@ jobs:
           else
             echo "changes=true" >> $GITHUB_ENV
           fi
+
       - name: Get Latest Commit SHA from Base Branch
         if: env.changes == 'true'
         id: get_sha
@@ -86,6 +95,7 @@ jobs:
           SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             https://api.github.com/repos/${{ github.repository }}/git/refs/heads/${{ inputs.base_branch }} | jq -r .object.sha)
           echo "sha=$SHA" >> $GITHUB_ENV
+
       - name: Create New Branch
         if: env.changes == 'true'
         id: create_branch
@@ -107,22 +117,22 @@ jobs:
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -d "{\"ref\":\"refs/heads/$BRANCH_NAME\", \"sha\":\"${{ env.sha }}\"}" \
             https://api.github.com/repos/${{ github.repository }}/git/refs
-          
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
           echo "COMMIT_MESSAGE=$COMMIT_MESSAGE" >> $GITHUB_ENV
           echo "PR_TITLE=$PR_TITLE" >> $GITHUB_ENV
           echo "PR_BODY=$PR_BODY" >> $GITHUB_ENV
           echo "BASE_BRANCH=$BASE_BRANCH" >> $GITHUB_ENV
+
       - name: Commit Changes Using GitHub API
         if: env.changes == 'true'
         run: |
           echo "Committing changes to $BRANCH_NAME..."
           FILES_CHANGED=$(git status --porcelain | awk '{print $2}')
           for file in $FILES_CHANGED; do
-            CONTENT=$(base64 -w 0 $file)
-            FILENAME=$(basename $file)
+            CONTENT=$(base64 -w 0 "$file")
+            FILENAME=$(basename "$file")
             SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              https://api.github.com/repos/${{ github.repository }}/contents/$file?ref=${{ env.BRANCH_NAME }} | jq -r .sha)
+              "https://api.github.com/repos/${{ github.repository }}/contents/$file?ref=${{ env.BRANCH_NAME }}" | jq -r .sha)
             if [ "$SHA" == "null" ]; then
               SHA=""
             fi
@@ -133,18 +143,18 @@ jobs:
               \"content\": \"$CONTENT\",
               \"branch\": \"${{ env.BRANCH_NAME }}\",
               \"sha\": \"$SHA\"
-            }" > $JSON_PAYLOAD
+            }" > "$JSON_PAYLOAD"
             # Use --data-binary to send the payload
             curl -s -X PUT -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -H "Content-Type: application/json" \
               --data-binary @"$JSON_PAYLOAD" \
-              https://api.github.com/repos/${{ github.repository }}/contents/$file
+              "https://api.github.com/repos/${{ github.repository }}/contents/$file"
           done
+
       - name: Create Pull Request Using API
         if: env.changes == 'true'
         run: |
           echo "Creating a pull request..."
-          
           ESCAPED_TITLE=$(echo "${{ env.PR_TITLE }}" | jq -Rsa .)
           ESCAPED_BODY=$(echo "${{ env.PR_BODY }}" | jq -Rsa .)
           API_RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
