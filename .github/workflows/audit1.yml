@@ -43,20 +43,22 @@ jobs:
       # -------------------------------
       # New Steps: Check for internal vulnerabilities and act accordingly
       # -------------------------------
-      - name: Check for internal vulnerabilities in npm
-        id: check_internal_vuln
-        run: |
-          echo "Running npm audit to check for internal vulnerabilities..."
-          # Run npm audit in JSON mode and store the output in audit.json
-          npm audit --json > audit.json
-          # Check if the vulnerability report mentions npm's internal dependency path
-          if grep -q "node_modules/npm/node_modules" audit.json; then
-            echo "Internal vulnerability detected in npm dependencies."
-            echo "internal_vuln=true" >> $GITHUB_ENV
-          else
-            echo "No internal vulnerabilities detected."
-            echo "internal_vuln=false" >> $GITHUB_ENV
-          fi
+     - name: Check for internal vulnerabilities in npm
+  id: check_internal_vuln
+  run: |
+    echo "Running npm audit to check for internal vulnerabilities..."
+    # Run npm audit in JSON mode and store the output in audit.json.
+    # Append '|| true' so that the command doesn't fail the step.
+    npm audit --json > audit.json || true
+    # Check if the vulnerability report mentions npm's internal dependency path
+    if grep -q "node_modules/npm/node_modules" audit.json; then
+      echo "Internal vulnerability detected in npm dependencies."
+      echo "internal_vuln=true" >> $GITHUB_ENV
+    else
+      echo "No internal vulnerabilities detected."
+      echo "internal_vuln=false" >> $GITHUB_ENV
+    fi
+
       - name: Update npm if internal vulnerability is detected
         if: env.internal_vuln == 'true'
         run: |
