@@ -99,7 +99,7 @@ jobs:
         run: |
           FORCE_MODE="${{ inputs.force }}"
           INTERNAL_VULN="${{ env.internal_vuln }}" 
-          TIMESTAMP=$(date +'%Y-%m-%d-%H-%M-%S')"
+          TIMESTAMP="$(date +'%Y-%m-%d-%H-%M-%S')"
 
           if [ "$FORCE_MODE" == "true" ]; then
             BRANCH_NAME="npm-audit-fix-force-$TIMESTAMP"
