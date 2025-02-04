@@ -68,7 +68,7 @@ jobs:
         if: env.internal_vuln == 'true'
         run: |
           echo "Updating npm because an internal vulnerability was detected..."
-          npm upgrade -g npm
+          npm upgrade
 
       - name: Build Project
         run: npm run build
