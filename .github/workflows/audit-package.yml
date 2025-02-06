@@ -1,4 +1,4 @@
-name: NPM Audit Fix and PR
+name: NPM Audit Fix and PR1
 
 on:
   workflow_dispatch:
