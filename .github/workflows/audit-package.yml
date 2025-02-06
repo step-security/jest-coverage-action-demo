@@ -11,6 +11,11 @@ on:
         description: "Specify a base branch"
         required: false
         default: "main"
+        
+permissions:
+  contents: write
+  pull-requests: write
+  packages: read   
 
 jobs:
   audit-fix:
