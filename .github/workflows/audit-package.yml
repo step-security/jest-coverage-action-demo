@@ -11,6 +11,10 @@ on:
         description: "Specify a base branch"
         required: false
         default: "main"
+      use_private_packages:
+        description: "Use private packages"
+        required: true
+        default: true
 
 permissions:
   contents: write
