@@ -28,9 +28,3 @@ jobs:
       force: ${{ inputs.force }}
       base_branch: ${{ inputs.base_branch }}
       use_private_packages: ${{ inputs.use_private_packages }}
-    secrets: inherit
-    permissions:
-      packages: read
-    # Debugging environment variable
-    env:
-      ACTIONS_STEP_DEBUG: "true"
