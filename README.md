@@ -1,332 +1,269 @@
-# vitest-coverage-report-action
+- [Important: **run-vcpkg@v11 requirements**](#important-run-vcpkgv11-requirements)
+- [Quickstart with a C++ project template](#quickstart-with-a-c-project-template)
+- [The **run-vcpkg@v11** action](#the-run-vcpkgv11-action)
+  - [Quickstart with instructions](#quickstart-with-instructions)
+  - [Action reference: all input/output parameters](#action-reference-all-inputoutput-parameters)
+  - [Flowchart](#flowchart)
+  - [Best practices](#best-practices)
+    - [Use **vcpkg** as a submodule of your repository](#use-vcpkg-as-a-submodule-of-your-repository)
+    - [Use vcpkg's vcpkg.json file to specify the dependencies](#use-vcpkgs-vcpkgjson-file-to-specify-the-dependencies)
+  - [Samples](#samples)
 
-This GitHub Action reports [vitest](https://vitest.dev/) coverage results as a GitHub step-summary and as a comment on a pull request.
+# Important: **run-vcpkg@v11 requirements**
 
-![Coverage Report as Step Summary](./docs/coverage-report.png)
+`run-vcpkg@v11` requires vcpkg more recent than 2023-03-29 (e.g. commit id `5b1214315250939257ef5d62ecdcbca18cf4fb1c`).
 
-The action generates a high-level coverage summary for all coverage categories, as well as a detailed, file-based report. The report includes links to the files themselves and the uncovered lines for easy reference.
+# Quickstart with a C++ project template
 
-## Usage
+Take a look at this [C++ project template](https://github.com/lukka/CppCMakeVcpkgTemplate/tree/v11) that applies all the following instructions, but also shows how to create a __pure__ workflow without using special GitHub action that you cannot run locally on your development machine, but directly using the tools (`CMake`, `Ninja`, `vcpkg`, `C++` compilers) you already use daily.
 
-To use this action, you need to configure `vitest` to create a coverage report with the following reporters:
+# [The **run-vcpkg@v11** action](https://github.com/marketplace/actions/run-vcpkg)
 
-- `json-summary` (required): This reporter generates a high-level summary of your overall coverage.
-- `json` (optional): If provided, this reporter generates file-specific coverage reports for each file in your project.
+The **run-vcpkg@v11** action setups (and optionally runs) [vcpkg](https://github.com/microsoft/vcpkg) to install the packages specified in the `vcpkg.json` manifest file.
+It leverages the vcpkg's [Binary Caching](https://learn.microsoft.com/en-us/vcpkg/users/binarycaching) backed to [GitHub Action cache](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows), delegating cache and key management to vpckg.
 
-You can configure the reporters in your Vite configuration file (e.g., `vite.config.js`) as follows:
+Special features which provide added value over a __pure__ workflow are:
+  - automatic caching leveraging `vcpkg`'s ability to store its [Binary Caching](https://learn.microsoft.com/en-us/vcpkg/users/binarycaching) artifacts onto the [GitHub Action cache](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows) so that packages are built only once and reused in subsequent workflow runs. The user can customize the behavior by setting the environment variable `VCPKG_BINARY_SOURCES` *before* vcpkg runs.
+  - set the workflow variables `ACTIONS_CACHE_URL` and `ACTIONS_RUNTIME_TOKEN` to let users easily running vcpkg
+  in a `run` step such as `- run: vcpkg install` or `- run: vcpkg integrate install` without forcing the
+  users to set the variables manually.
+  - automatic dump of log files created by `CMake` (e.g., `CMakeOutput.log`) and `vcpkg`. The content of those files flow into the workflow output log. Customizable by the user by setting the input `logCollectionRegExps`.
+  - automatic parsing of `CMake`, `vcpkg` and `gcc`, `clang`, `msvc` errors, reporting them contextually in the workflow summary by means of annotations.
+  - although disabled by default (see input `doNotCache`), `run-vcpkg` can cache vcpkg's executable and data files to speed up subsequent workflow runs. Since bootstrapping `vcpkg` already downloads a prebuilt binary saving the time to build `vcpkg`,
+  this form of caching is useful only when the prebuilt executable is not served as it happens for the ARM platform.
+  Note this cache does not contain the libraries built by vcpkg, which is instead managed by vcpkg itself.
 
-```js
-import { defineConfig } from 'vite';
+The provided [samples](#samples) use [GitHub hosted runners](https://help.github.com/en/actions/automating-your-workflow-with-github-actions/virtual-environments-for-github-hosted-runners).
 
-export default defineConfig({
-  test: {
-    coverage: {
-      // you can include other reporters, but 'json-summary' is required, json is recommended
-      reporter: ['text', 'json-summary', 'json'],
-      // If you want a coverage reports even if your tests are failing, include the reportOnFailure option
-      reportOnFailure: true,
-    }
-  }
-});
-```
+Good companions are the [run-cmake](https://github.com/marketplace/actions/run-cmake) and the
+[get-cmake](https://github.com/marketplace/actions/get-cmake) actions.
 
-Then execute `npx vitest --coverage.enabled true` in a step before this action.
+<br>
 
-### Example Workflow
+## Quickstart with instructions
 
-```yml
-name: 'Test'
-on: 
-  pull_request:
+It is __highly recommended__ to use:
+- [vcpkg as a submodule](#use-vcpkg-as-a-submodule-of-your-repository).
+- a [vcpkg.json](#use-vcpkgs-vcpkgjson-file-to-specify-the-dependencies) manifest file to declaratively specify the dependencies.
+- a `CMakePresets.json` file.
 
+```yaml
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    
-    permissions:
-      # Required to checkout the code
-      contents: read
-      # Required to put a comment into the pull-request
-      pull-requests: write
-
+  build:
     steps:
-    - uses: actions/checkout@v4
-    - name: 'Install Node'
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20.x'
-    - name: 'Install Deps'
-      run: npm install
-    - name: 'Test'
-      run: npx vitest --coverage.enabled true
-    - name: 'Report Coverage'
-      # Set if: always() to also generate the report if tests are failing
-      # Only works if you set `reportOnFailure: true` in your vite config as specified above
-      if: always() 
-      uses:  step-security/vitest-coverage-report-action@v2
+      #-uses: actions/cache@v3   <===== YOU DO NOT NEED THIS!
+
+      # Install latest CMake and Ninja.
+      - uses: lukka/get-cmake@latest
+      # Or pin to a specific CMake version:
+      # lukka/get-cmake@v3.27
+
+      # Setup vcpkg: ensures vcpkg is downloaded and built.
+      # Since vcpkg.json is being used later on to install the packages
+      # when `run-cmake` runs, no packages are installed at this time
+      # (and vcpkg does not run).
+      - name: Setup anew (or from cache) vcpkg (and does not build any package)
+        uses: step-security/run-vcpkg@v11 # Always specify the specific _version_ of the
+                                  # action you need, `v11` in this case to stay up
+                                  # to date with fixes on the v11 branch.
+        #with:
+          # This is the default location of the directory containing vcpkg sources.
+          # Change it to the right location if needed.
+          # vcpkgDirectory: '${{ github.workspace }}/vcpkg'
+
+          # If not using a Git submodule for vcpkg sources, this input
+          # specifies which commit id to checkout from a Git repo.
+          # Notes: 
+          # - it must _not_ be set if using a Git submodule for vcpkg.
+          # - if not provided, the `vcpkgConfigurationJsonGlob` or `vcpkgJsonGlob`
+          #   are being used to locate either a vcpkg-configuration.json or vcpkg.json
+          #   in order to use the builtin-baseline or the default-registry's
+          #   builtin baseline.
+          # vcpkgGitCommitId: '${{ matrix.vcpkgCommitId }}'
+
+          # This is only needed if the command `vcpkg install` must run at this step.
+          # Instead it is highly suggested to let `run-cmake` to run vcpkg later on
+          # using the vcpkg.cmake toolchain. The default is `false`.
+          # runVcpkgInstall: true
+
+          # This is only needed if `runVpkgInstall` is `true`.
+          # This glob expression used to locate the vcpkg.json and  use
+          # its directory location as `working directory` when running `vcpkg install`.
+          # Change it to match a single manifest file you want to use.
+          # Note: do not use `${{ github.context }}` to compose the value as it
+          # contains backslashes that would be misinterpreted. Instead
+          # compose a value relative to the root of the repository using
+          # `**/path/from/root/of/repo/to/vcpkg.json` to match the desired `vcpkg.json`.
+          # vcpkgJsonGlob: '**/vcpkg.json'
+
+      - name: Run CMake consuming CMakePreset.json and run vcpkg to build packages
+        uses: lukka/run-cmake@v10
+        with:
+          # This is the default path to the CMakeLists.txt along side the
+          # CMakePresets.json. Change if you need have CMakeLists.txt and CMakePresets.json
+          # located elsewhere.
+          # cmakeListsTxtPath: '${{ github.workspace }}/CMakeLists.txt'
+
+          # You could use CMake workflow presets defined in the CMakePresets.json
+          # with just this line below. Note this one cannot be used with any other
+          # preset input, it is mutually exclusive.
+          # workflowPreset: 'workflow-name'
+
+          # This is the name of the CMakePresets.json's configuration to use to generate
+          # the project files. This configuration leverages the vcpkg.cmake toolchain file to
+          # run vcpkg and install all dependencies specified in vcpkg.json.
+          configurePreset: 'ninja-multi-vcpkg'
+          # Additional arguments can be appended to the cmake command.
+          # This is useful to reduce the number of CMake's Presets since you can reuse
+          # an existing preset with different variables.
+          configurePresetAdditionalArgs: "['-DENABLE_YOUR_FEATURE=1']"
+
+          # This is the name of the CMakePresets.json's configuration to build the project.
+          buildPreset: 'ninja-multi-vcpkg'
+          # Additional arguments can be appended when building, for example to specify the
+          # configuration to build.
+          # This is useful to reduce the number of CMake's Presets you need in CMakePresets.json.
+          buildPresetAdditionalArgs: "['--config Release']"
+
+          # This is the name of the CMakePresets.json's configuration to test the project with.
+          testPreset: 'ninja-multi-vcpkg'
+          # Additional arguments can be appended when testing, for example to specify the config
+          # to test.
+          # This is useful to reduce the number of CMake's Presets you need in CMakePresets.json.
+          testPresetAdditionalArgs: "['--config Release']"
+
+    #env:
+    #  [OPTIONAL] Define the vcpkg's triplet you want to enforce, otherwise the default one
+    #  for the hosting system will be automatically choosen (x64 is the default on all
+    #  platforms, e.g. `x64-osx`).
+    #  VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+    #
+    #  [OPTIONAL] If VCPKG_DEFAULT_TRIPLET is defined then it may also be desirable to set the host
+    #  triplet to avoid unintended cross compiling behavior.
+    #  VCPKG_DEFAULT_HOST_TRIPLET: ${{ matrix.triplet }}
+    #
+    #  [OPTIONAL] By default the action disables vcpkg's telemetry by defining VCPKG_DISABLE_METRICS.
+    #  This behavior can be disabled by defining `VCPKG_ENABLE_METRICS` as follows.
+    #  VCPKG_ENABLE_METRICS: 1
+    #
 ```
 
-> [!NOTE]
-> To enable comments on pull requests originating from forks, please refer to the configuration provided in the [Working with Pull Requests from Forks](#working-with-pull-requests-from-forks) section.
+<br>
 
-### Required Permissions
+## Action reference: all input/output parameters
 
-This action requires the `pull-request: write` permission to add a comment to your pull request. If you're using the default `GITHUB_TOKEN`, ensure that you include both `pull-request: write` and `contents: read` permissions in the job. The `contents: read` permission is necessary for the `actions/checkout` action to checkout the repository. This is particularly important for new repositories created after GitHub's [announcement](https://github.blog/changelog/2023-02-02-github-actions-updating-the-default-github_token-permissions-to-read-only/) to change the default permissions to `read-only` for all new `GITHUB_TOKEN`s.
+Description of all input parameters: [action.yml](https://github.com/step-security/run-vcpkg/blob/main/action.yml)
 
-### Options
+<br>
 
-| Option                      | Description                                                                                                                                                                | Default                                                                       |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `working-directory`         | The main path to search for coverage- and configuration files (adjusting this is especially useful in monorepos).                                                          | `./`                                                                          |
-| `json-summary-path`         | The path to the json summary file.                                                                                                                                         | `${working-directory}/coverage/coverage-summary.json`                         |
-| `json-final-path`           | The path to the json final file.                                                                                                                                           | `${working-directory}/coverage/coverage-final.json`                           |
-| `vite-config-path`          | The path to the vite config file. Will check the same paths as vite and vitest                                                                                             | Checks pattern `${working-directory}/vite[st].{config|workspace}.{t\|mt\|ct\|j\|mj\|cj}s` |
-| `github-token`              | A GitHub access token with permissions to write to issues (defaults to `secrets.GITHUB_TOKEN`).                                                                            | `${{ github.token }}`                                                         |
-| `file-coverage-mode`        | Defines how file-based coverage is reported. Possible values are `all`, `changes` or `none`.                                                                               | `changes`                                                                     |
-| `name`                      | Give the report a custom name. This is useful if you want multiple reports for different test suites within the same PR. Needs to be unique.                               | ''                                                                            |
-| `json-summary-compare-path` | The path to the json summary file to compare against. If given, will display a trend indicator and the difference in the summary. Respects the `working-directory` option. | undefined                                                                     |
-| `pr-number`                 | The number of the PR to post a comment to (if any)                                                                                                                             | If in the context of a PR, the number of that PR.<br/> If in the context of a triggered workflow, the PR of the triggering workflow.                                                                    <br/>If no PR context is found, it defaults to `undefined` |
+## Flowchart
 
-#### File Coverage Mode
+Flowchart with related input in [action.yml](https://github.com/step-security/run-vcpkg/blob/main/action.yml) which let customize the flow.
 
-- `changes` - show Files coverage only for project files changed in that pull request (works only with `pull_request`, `pull_request_review`, `pull_request_review_comment` actions)
-- `all` - show it grouped by changed and not changed files in that pull request (works only with `pull_request`, `pull_request_review`, `pull_request_review_comment` actions)
-- `none` - do not show any File coverage details (only total Summary)
-
-#### Name
-
-If your project includes multiple test suites and you want to consolidate their coverage reports into a single pull request comment, you must assign a unique `name` to each action step that parses a summary report. For example:
-
-```yml
-## ...
-    - name: 'Report Frontend Coverage'
-      if: always() # Also generate the report if tests are failing
-      uses:  step-security/vitest-coverage-report-action@v2
-      with:
-        name: 'Frontend'
-        json-summary-path: './coverage/coverage-summary-frontend.json'
-        json-final-path: './coverage/coverage-final-frontend.json
-    - name: 'Report Backend Coverage'
-      if: always() # Also generate the report if tests are failing
-      uses:  step-security/vitest-coverage-report-action@v2
-      with:
-        name: 'Backend'
-        json-summary-path: './coverage/coverage-summary-backend.json'
-        json-final-path: './coverage/coverage-final-backend.json'
+```
+┌──────────────────────────┐
+|  If running in GH Runner,|   Environment variables:
+|  set the env vars:       |   - If any env var is
+|  - VCPKG_BINARY_SOURCES  |     already defined
+|  - ACTIONS_CACHE_URL     |     it will not be overridden.
+|  - ACTIONS_RUNTIME_TOKEN |
+└─────────────┬────────────┘
+              ▼
+┌──────────────────────────┐
+|  Skipped by default.     |
+│  Compute cache key from: │   Inputs:
+│  - vcpkg Git commit      │   - `vcpkgGitCommitId`
+│  - platform and OS       │   - `doNotCache`: set to false
+└─────────────┬────────────┘     to run this block.
+              ▼
+ ┌─────────────────────────┐   Inputs:
+ | Skipped by default.     |   - `vcpkgDirectory`
+ │ Restore vcpkg           │   - `doNotCache`: set to false
+ │ from the GH cache.      │     to run this block.
+ └────────────┬────────────┘
+              ▼
+ ┌────────────────────────────┐   Inputs:
+ │ If vcpkg is not a          │   - `vcpkgDirectory`
+ │ submodule, fetch it.       │   - `vcpkgGitCommitId` 
+ │ Use either the provided    │   - `vcpkgGitURL`
+ │ commit id or the default   │   - `doNotUpdateVcpkg`
+ │ registry baseline in       │   - `vcpkgConfigurationJsonGlob`
+ │ vcpkg-configuration.json   │   - `vcpkgJsonGlob`
+ │ or vcpkg.json.             │   Environment variables:
+ └────────────┬───────────────┘   - VCPKG_CONFIGURATION_JSON_IGNORE_PATTERNS:
+              ▼                     semicolon separated ignore patterns.
+ ┌─────────────────────────┐
+ │ Rebuild vcpkg executable│   Inputs:
+ │ if not in sync with     │   - `vcpkgGitCommitId`
+ │ sources.                │   - `vcpkgGitURL`
+ └────────────┬────────────┘
+              ▼
+  <Is `runVcpkgInstall:true`>┐    Inputs:
+          ────┬────        No│   - `runVcpkgInstall`
+              │ Yes          │
+              ▼              │
+ ┌─────────────────────────┐ │  Inputs:
+ │ Locate vcpkg.json.      │ │  - `vcpkgJsonGlob`
+ └────────────┬────────────┘ │  - `vcpkgJsonIgnores`
+              ▼              │
+ ┌─────────────────────────┐ │
+ │ Launch `vcpkg install`  │ │   Inputs:
+ │ where vcpkg.json has    │ │   - `runVcpkgFormatString`
+ │ been located.           │ │   Environment variables:
+ └────────────┬────────────┘ │   - `VCPKG_DEFAULT_TRIPLET` is used. If not yet
+              │              │     set, it is set to the current platform.
+              │              │   - `VCPKG_INSTALLED_DIR` is used as value for
+              │              │     `--x-install-root` when running `vcpkg install`.
+              │              │     Check out the `runVcpkgFormatString` input.
+              ▼              │   - `VCPKG_BINARY_SOURCES` is used. If not yet
+ ┌─────────────────────────┐ │      set, it is set to leverage the GitHub Action
+ │ Set `VCPKG_ROOT` and    │ │      cache storage for Binary Caching artifacts.
+ │ `VCPKG_DEFAULT_TRIPLET` │ │
+ │ workflow-wide env vars. │ │
+ └────────────┬────────────┘ │
+              ├───────────── ┘
+              ▼
+ ┌─────────────────────────┐
+ | Skipped by default.     |
+ │ If no cache-hit,        │  Inputs:
+ │ store vcpkg onto        │  - `doNotCache`: set to false to
+ │ GH cache.               │    run this block.
+ └────────────┬────────────┘
+              |
+              ▼
+              ⬬
 ```
 
-### Coverage Thresholds
+<br>
 
-> [!WARNING]
-> Currently, this action does not import the vite-configuration, but parses it as string to extract the coverage-thresholds by an regexp. In other words: All thresholds need to be directly defined in the config-file given to this action through the vite-config-path input. E.g., when using workspace to extend a parent-configuration, the thresholds can not be defined in the parent-config.
+## Best practices
 
-This action reads the coverage thresholds specified in the `coverage` property of the Vite configuration file. It then uses these thresholds to determine the status of the generated report.
+### Use **vcpkg** as a submodule of your repository
 
-For instance, consider the following configuration:
+ **It is highly suggested to pin the specific version of vcpkg you want to use to keep a consistent development experience between local and remote build environments.** This is accomplished by **using vcpkg as submodule of your Git repository**; this way the version of `vcpkg` used is implied by the commit id specified by the submodule for `vcpkg`.
 
-```typescript
-import { defineConfig } from 'vite';
+### Use vcpkg's vcpkg.json file to specify the dependencies
 
-export default defineConfig({
-  test: {
-    coverage: {
-      thresholds: {
-        lines: 60,
-        branches: 60,
-        functions: 60,
-        statements: 60
-      }
-    }
-  }
-});
-```
+The [vcpkg.json](https://learn.microsoft.com/en-us/vcpkg/reference/vcpkg-json) is a manifest file that declaratively specifies the dependencies to be installed.
+The file is being used automatically by running CMake (e.g. by using [run-cmake](https://github.com/lukka/run-cmake)) when:
+ - starting CMake with the `vcpkg.cmake` toolchain file.
+ - the root CMake source directory contains a [vcpkg.json](https://learn.microsoft.com/en-us/vcpkg/reference/vcpkg-json) file.
 
-With the above configuration, the report would appear as follows:
+Or it can also be used by invoking `vcpkg install` in a directory where `vcpkg.json` is located (e.g., input `runVcpkgInstall : true`).
 
-![Coverage Threshold Report](./docs/coverage-report-threshold.png)
+When conditions are satisfied, the toolchain execution starts [vcpkg](https://github.com/microsoft/vcpkg) to install the packages declared in the manifest file.
 
-If no thresholds are defined, the status will display as '🔵'.
+ **Putting this manifest-like file under source control is highly recommended as this helps to run vcpkg the same exact way locally and remotely on the build servers.**
+The dependencies specified in the vcpkg.json file are installed when CMake runs (i.e. at `run-cmake` execution time).
 
-### Coverage Trend Indicator
+## Samples
 
-By using the `json-summary-compare-path` option, the action will display both a trend indicator and the coverage difference in the summary. This feature is particularly useful for tracking changes between the main branch and a previous run.
+_Checkmarks_ indicates whether the samples "uses" or specifies the thing in the header or whether it is true.
 
-![Screenshot of the action-result showcasing the trend indicator](./docs/coverage-report-trend-indicator.png)
+| workflow link                                                                                                              | `vcpkg` as submodule | explicit triplet | `vcpkg` toolchain | `CMake`'s Presets | `Ninja` | `run-vcpkg` runs vcpkg | `CMake` runs `vcpkg` |
+| :------------------------------------------------------------------------------------------------------------------------- | :------------------: | :--------------: | :---------------: | :---------------: | :-----: | :--------------------: | :------------------: |
+| [link](https://github.com/lukka/CppBuildTasks-Validation/blob/v10/.github/workflows/hosted-ninja-vcpkg_submod.yml)         |          ✅           |        ❌         |         ✅         |         ✅         |    ✅    |           ❌            |          ✅           |
+| [link](https://github.com/lukka/CppBuildTasks-Validation/blob/v10/.github/workflows/hosted-ninja-vcpkg.yml)                |          ❌           |        ❌         |         ✅         |         ✅         |    ✅    |           ❌            |          ✅           |
+| [link](https://github.com/lukka/CppBuildTasks-Validation/blob/v10/.github/workflows/hosted-ninja-vcpkg-install.yml)        |          ❌           |        ❌         |         ✅         |         ✅         |    ✅    |           ✅            |          ❌           |
+| [link](https://github.com/lukka/CppBuildTasks-Validation/blob/v10/.github/workflows/hosted-ninja-vcpkg_submod-triplet.yml) |          ✅           |        ✅         |         ✅         |         ✅         |    ✅    |           ❌            |          ✅           |
 
-The most straightforward method to obtain the comparison file within a pull request is to run the tests and generate the coverage for the target branch within a matrix job:
-
-```yml
-name: "Test"
-on:
-  pull_request:
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        branch:
-          - ${{ github.head_ref }}
-          - "main"
-
-    permissions:
-      # Required to checkout the code
-      contents: read
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ matrix.branch }}
-      - name: "Install Node"
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20.x"
-      - name: "Install Deps"
-        run: npm install
-      - name: "Test"
-        run: npx vitest --coverage.enabled true
-      - name: "Upload Coverage"
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.branch }}
-          path: coverage
-
-  report-coverage:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: "Download Coverage Artifacts"
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-${{ github.head_ref }}
-          path: coverage
-      - uses: actions/download-artifact@v4
-        with:
-          name: coverage-main
-          path: coverage-main
-      - name: "Report Coverage"
-        uses: step-security/vitest-coverage-report-action@v2
-        with:
-          json-summary-compare-path: coverage-main/coverage-summary.json
-```
-
-### Workspaces
-
-If you're using a monorepo with [Vitest Workspaces](https://vitest.dev/guide/workspace.html) and running Vitest from your project's root, Vitest will disregard the `coverage` property in individual project-level Vite configuration files. This is because some [configuration options](https://vitest.dev/guide/workspace.html#configuration), such as coverage, apply to the entire workspace and are not allowed in a project config.
-
-In such cases, you can create a Vite configuration file at the root of your project, alongside your `vitest.workspace.js` file, to configure coverage for the entire workspace:
-
-```js
-import { defineConfig } from 'vite';
-
-export default defineConfig({
-  test: {
-    coverage: {
-      // you can include other reporters, but 'json-summary' is required, json is recommended
-      reporter: ['text', 'json-summary', 'json'],
-    }
-  }
-});
-```
-
-Alternatively, you can supply [coverage options](https://vitest.dev/config/#coverage) directly to the CLI using dot notation:
-
-```sh
-npx vitest --coverage.enabled --coverage.provider=v8 --coverage.reporter=json-summary --coverage.reporter=json
-```
-
-### Working with pull requests from forks
-
-Due to security considerations, GitHub Actions does not provide workflows originating from a fork with write access to your repository, even if such permissions are configured. Consequently, this action cannot comment on these pull requests using the above-documented configuration.
-
-For more information on why this is the case, refer to the following article:
-[Preventing Pwn-Requests](https://securitylab.github.com/research/github-actions-preventing-pwn-requests/).
-
-However, you can circumvent this limitation by dividing your workflow into two separate workflows (see examples below):
-
-1. **Testing Workflow**: This workflow runs tests in response to the `pull_request` trigger, within the context of the actual pull request, and uploads the coverage reports as artifacts.
-
-2. **Reporting Workflow**: This workflow is triggered upon the completion of the **Testing Workflow** using the `workflow_runs` event. It downloads and parses the coverage report, and posts a comment on the pull request.
-
-> [!IMPORTANT]
-> The **Reporting Workflow** must reside within your default branch (as specified in [GitHub's workflow_run documentation](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#workflow_run))
-
-This action will automatically detect:
-
-- If it is being run within a `workflow_run` trigger
-- If the triggering workflow was a pull request
-
-It will then automatically locate the appropriate pull request to comment on.
-
-#### Example
-
-- **test.yml**
-
-    ```yml
-    name: "Test"
-    on:
-      pull_request:
-
-    jobs:
-      test:
-        runs-on: ubuntu-latest
-
-        permissions:
-          contents: read
-
-        steps:
-          - uses: actions/checkout@v4
-          - name: "Install Node"
-            uses: actions/setup-node@v4
-            with:
-              node-version: "20.x"
-          - name: "Install Deps"
-            run: npm install
-          - name: "Test"
-            run: npx vitest --coverage.enabled true
-
-          - name: "Upload Coverage"
-            uses: actions/upload-artifact@v4
-            with:
-              name: coverage
-              path: coverage
-    ```
-
-- **coverage.yml** (has to be on the default branch)
-
-    ```yml
-    name: Report Coverage
-
-    on:
-      workflow_run:
-        workflows: ["Test"]
-        types:
-          - completed
-
-    jobs:
-      report:
-        runs-on: ubuntu-latest
-
-        permissions:
-          pull-requests: write
-
-        steps:
-          - uses: actions/checkout@v4
-          - uses: actions/download-artifact@v4
-            with:
-              github-token: ${{ secrets.GITHUB_TOKEN }}
-              run-id: ${{ github.event.workflow_run.id }}
-          - name: "Report Coverage"
-            uses: step-security/vitest-coverage-report-action@v2
-    ```
-
-> [!NOTE]
-> This configuration also works for pull requests originating from your own repository (not forks), so it can be used generally.
-
-#### Limitations & Considerations
-
-This approach has a few limitations:
-
-- The **Reporting Workflow** is only triggered after the **Testing Workflow** completes. As a result, there will be a (most likely neglectable) delay before a comment appears on the pull request.
-- To obtain the pull request number from a forked pull request, it's necessary to iterate over all pull requests in the repository using the [Pulls REST API](https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#list-pull-requests) and match it by the `head_sha`. This is due to the `github` context of the triggering workflow not containing the pull request information ([see this discussion](https://github.com/orgs/community/discussions/25220)). While this is generally not an issue, it could cause delays if the repository is large and the pull request is significantly old.
-- Since the **Reporting Workflow** runs in the context of your repository's default branch, changes to your coverage threshold won't be reflected in the pull request comment. This can be mitigated by also uploading the Vite config as an artifact in the **Testing Workflow**.
