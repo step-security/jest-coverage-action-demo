@@ -14,7 +14,7 @@ on:
       use_private_packages:
         description: "Use private packages?"
         required: true
-        default: true
+        type: boolean
 
 permissions:
   contents: write
