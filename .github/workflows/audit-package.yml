@@ -12,8 +12,8 @@ on:
         required: false
         default: "main"
       use_private_packages:
-        description: "Use private packages"
-        required: true
+        description: "Use private packages?"
+        required: false
         default: true
 
 permissions:
