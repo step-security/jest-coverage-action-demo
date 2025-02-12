@@ -1,4 +1,4 @@
-name: NPM Audit Fix Run
+name: Dependency Audit Fix Run
 
 on:
   workflow_dispatch:
@@ -6,7 +6,6 @@ on:
       package_manager:
         description: "Specify the package manager (npm or yarn)"
         required: true
-        default: "npm"
       force:
         description: "Use --force flag for npm audit fix?"
         required: true
