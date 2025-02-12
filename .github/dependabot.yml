@@ -1,12 +1,14 @@
-# Set update schedule for GitHub Actions
 version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-
-  - package-ecosystem: npm
-    directory: /
+      interval: "daily"
+  - package-ecosystem: "npm"
+    directory: "/"
     schedule:
-      interval: daily
+      interval: "monthly"
+    ignore:
+    - dependency-name: "husky"
+    - dependency-name: "lint-staged"
+    - dependency-name: "eslint*"
