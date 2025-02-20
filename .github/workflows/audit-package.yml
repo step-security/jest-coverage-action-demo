@@ -54,6 +54,11 @@ jobs:
           node-version: "20"
           cache: ${{ inputs.package_manager }}
 
+      - name: Set up Git User
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+     
       - name: Authenticate npm with GitHub Packages (if using private packages)
         if: inputs.use_private_packages == true
         run: |
