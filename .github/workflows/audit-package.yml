@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   audit-fix:
-    uses: step-security/reusable-workflows/.github/workflows/audit_fix.yml@v1
+    uses: step-security/reusable-workflows/.github/workflows/audit_fix.yml@fix_Cron-Behavior-For-Audit-Fix
     with:
       package_manager: ${{ inputs.package_manager }}
       force: ${{ inputs.force }}
