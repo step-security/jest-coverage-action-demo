@@ -7,12 +7,14 @@ on:
         required: false
         default: "npm"
       force:
+        description: "Use --force flag for npm audit fix?"
         required: false
         type: boolean
       base_branch:
         required: false
         default: "main"
       use_private_packages:
+        description: "Use private packages (default: false)"
         required: false
         type: boolean
       script:
