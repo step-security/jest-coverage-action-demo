@@ -19,7 +19,7 @@ on:
         type: boolean
       script:
         required: false
-        default: "npm run all"
+        default: "npm run build"
 
 permissions:
   contents: write
@@ -28,7 +28,7 @@ permissions:
 
 jobs:
   audit-fix:
-    uses: step-security/reusable-workflows/.github/workflows/audit_fix.yml@fix_Cron-Behavior-For-Audit-Fix
+    uses: step-security/reusable-workflows/.github/workflows/audit_fix.yml@v1
     with:
       package_manager: ${{ inputs.package_manager }}
       force: ${{ inputs.force }}
