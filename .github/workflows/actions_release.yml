@@ -1,35 +1,26 @@
-name: NPM Audit Fix Run
+name: Release GitHub Actions
 
 on:
   workflow_dispatch:
     inputs:
-      package_manager:
-        description: "Specify the package manager (npm or yarn)"
+      tag:
+        description: "Tag for the release"
         required: true
-        default: "npm"
-      force:
-        description: "Use --force flag for npm audit fix?"
-        required: true
-        type: boolean
-      base_branch:
-        description: "Specify a base branch"
-        required: true
-        default: "main"
-      use_private_packages:
-        description: "Use private packages?"
-        required: true
-        type: boolean
       script:
-        description: "Specify the npm/yarn script to run"
-        required: true
-
-jobs:
-  audit-fix:
-    uses: step-security/reusable-workflows/.github/workflows/npm_audit_fix.yml@fix_Cron-Behavior-For-Audit-Fix
-    with:
-      force: ${{ inputs.force }}
-      base_branch: ${{ inputs.base_branch }}
+        description: "Specify the build script to run"
+        required: false
+        type: string
+        default: "npm run all"
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+
+jobs:
+  release:
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: step-security/reusable-workflows/.github/workflows/actions_release.yaml@v1
+    with:
+      tag: "${{ github.event.inputs.tag }}"
