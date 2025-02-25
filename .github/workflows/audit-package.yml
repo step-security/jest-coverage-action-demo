@@ -190,15 +190,28 @@ jobs:
       - name: Run OSV Scanner on lock file
         id: osv_scan
         run: |
-          curl -sSL https://github.com/google/osv-scanner/releases/latest/download/osv-scanner-linux-amd64 -o osv-scanner
+          OSV_SCANNER_URL="https://github.com/google/osv-scanner/releases/latest/download/osv-scanner-linux-amd64"
+          curl -sSL "$OSV_SCANNER_URL" -o osv-scanner || wget -q -O osv-scanner "$OSV_SCANNER_URL"
           chmod +x osv-scanner
-          
-          if [ -f "package-lock.json" ]; then
-            SCAN_RESULT=$(./osv-scanner --lockfile=package-lock.json --json || true)
-          elif [ -f "yarn.lock" ]; then
-            SCAN_RESULT=$(./osv-scanner --lockfile=yarn.lock --json || true)
+
+          if file osv-scanner | grep -q "ELF"; then
+            echo "✅ OSV Scanner downloaded successfully."
           else
-            echo "No lockfile found. Skipping OSV scan."
+            echo "❌ OSV Scanner download failed or is corrupted."
+            cat osv-scanner
+            exit 1
+          fi
+
+          if [ "${{ inputs.package_manager }}" == "npm" ]; then
+            LOCKFILE="package-lock.json"
+          else
+            LOCKFILE="yarn.lock"
+          fi
+
+          if [ -f "$LOCKFILE" ]; then
+            SCAN_RESULT=$(./osv-scanner --lockfile="$LOCKFILE" --json || true)
+          else
+            echo "No lockfile ($LOCKFILE) found. Skipping OSV scan."
             exit 0
           fi
 
@@ -206,6 +219,8 @@ jobs:
 
           if [[ -n "$VULNERABILITIES" && "$VULNERABILITIES" != "null" ]]; then
             echo "PENDING_VULNS=$(echo "$VULNERABILITIES" | base64 -w 0)" >> $GITHUB_ENV
+          fi
+
           fi
 
       - name: Comment on PR with Remaining Vulnerabilities
