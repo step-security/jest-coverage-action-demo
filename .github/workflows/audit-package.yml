@@ -221,15 +221,18 @@ jobs:
             exit 0
           fi
 
-          SCAN_RESULT=$(./osv-scanner --lockfile="$LOCKFILE" --json 2>/dev/null || true)
-          if [[ -z "$SCAN_RESULT" || "$SCAN_RESULT" == "null" ]]; then
+          ./osv-scanner --lockfile="$LOCKFILE" --json | tee osv-scan-output.json
+
+          if [ ! -s osv-scan-output.json ]; then
             echo "⚠️ OSV Scanner did not return valid output. No vulnerabilities found."
             exit 0
           fi
 
-          VULNERABILITIES=$(echo "$SCAN_RESULT" | jq '.vulnerabilities' || echo "")
+          VULNERABILITIES=$(jq '.vulnerabilities' osv-scan-output.json || echo "")
 
           if [[ -n "$VULNERABILITIES" && "$VULNERABILITIES" != "null" && "$VULNERABILITIES" != "[]" ]]; then
+            echo "🚨 Vulnerabilities detected:"
+            echo "$VULNERABILITIES" | jq -r '.[] | "\(.package) (\(.version)) - \(.id)"'
             echo "PENDING_VULNS=$(echo "$VULNERABILITIES" | base64 -w 0)" >> $GITHUB_ENV
           else
             echo "✅ No vulnerabilities found."
