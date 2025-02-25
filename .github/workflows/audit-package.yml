@@ -177,26 +177,34 @@ jobs:
             echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
           fi
 
-      - name: Request Review from Team
+      - name: Add or Update PR Comment for Audit Fixes
         if: env.PR_NUMBER != ''
         run: |
-          echo "Requesting review for PR #${{ env.PR_NUMBER }} from team maintained-actions-dev..."
-          curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/orgs/step-security/teams" | jq '.'
+          echo "🔍 Checking for existing PR comments for audit fixes..."
 
-          curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/step-security/jest-coverage-action-demo/collaborators" | jq -r '.[].login'
+          PR_COMMENT_BODY="🚀 *Audit fixes applied via automation.*\n\n"
+          PR_COMMENT_BODY+="@${{ github.repository_owner }}/maintained-actions-dev, please review the latest updates."
 
-      - name: Request Review from Team
-        if: env.PR_NUMBER != ''
-        run: |
-          echo "Requesting review for PR #${{ env.PR_NUMBER }} from team maintained-actions-dev..."
-          curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            -d "{
-              \"team_reviewers\": [\"step-security/maintained-actions-dev\"]
-            }" \
-            "https://api.github.com/repos/step-security/jest-coverage-action-demo/pulls/${{ env.PR_NUMBER }}/requested_reviewers"
+          EXISTING_COMMENT_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments" \
+            | jq -r '.[] | select(.body | contains("Audit fixes applied via automation")) | .id' | tail -n 1)
+
+          if [[ -n "$EXISTING_COMMENT_ID" && "$EXISTING_COMMENT_ID" != "null" ]]; then
+            echo "🔄 Updating existing PR comment..."
+            curl -s -X PATCH -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"body\": \"$PR_COMMENT_BODY\"}" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/comments/$EXISTING_COMMENT_ID" > /dev/null
+            echo "✅ PR comment updated."
+          else
+            echo "📝 Creating new PR comment..."
+            curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"body\": \"$PR_COMMENT_BODY\"}" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments" > /dev/null
+            echo "✅ PR comment created."
+          fi
+
 
       - name: Run OSV Scanner on lock file
         id: osv_scan
