@@ -181,10 +181,20 @@ jobs:
         if: env.PR_NUMBER != ''
         run: |
           echo "Requesting review for PR #${{ env.PR_NUMBER }} from team maintained-actions-dev..."
+          curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/orgs/step-security/teams" | jq -r '.[].slug'
+
+          curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/step-security/jest-coverage-action-demo/collaborators" | jq -r '.[].login'
+
+      - name: Request Review from Team
+        if: env.PR_NUMBER != ''
+        run: |
+          echo "Requesting review for PR #${{ env.PR_NUMBER }} from team maintained-actions-dev..."
           curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             -d "{
-              \"team_reviewers\": [\"maintained-actions-dev\"]
+              \"team_reviewers\": [\"step-security/maintained-actions-dev\"]
             }" \
             "https://api.github.com/repos/step-security/jest-coverage-action-demo/pulls/${{ env.PR_NUMBER }}/requested_reviewers"
 
