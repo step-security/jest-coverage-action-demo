@@ -260,14 +260,14 @@ jobs:
 
           ISSUE_BODY="🚨 *OSV Scanner found unresolved vulnerabilities after audit fix.* \n\n"
           ISSUE_BODY+="**Vulnerabilities in \`${{ inputs.package_manager }}\`:**\n\`\`\`\n$(echo $PENDING_VULNS | base64 -d | jq -r '.[].id')\n\`\`\`\n\n"
-          ISSUE_BODY+="@maintained-actions-dev, please investigate."
+          ISSUE_BODY+="please investigate."
 
           ISSUE_RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             -d "{
               \"title\": \"Security Alert: Unfixable Vulnerabilities\",
               \"body\": \"$ISSUE_BODY\",
-              \"assignees\": [\"maintained-actions-dev\"]
+               \"assignees\": [\"Raj-StepSecurity\"]
             }" "https://api.github.com/repos/${{ github.repository }}/issues")
 
           ISSUE_URL=$(echo "$ISSUE_RESPONSE" | jq -r '.html_url')
@@ -279,3 +279,4 @@ jobs:
           else
             echo "✅ Issue created: $ISSUE_URL"
           fi
+
