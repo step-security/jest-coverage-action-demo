@@ -208,7 +208,7 @@ jobs:
             echo "✅ OSV Scanner downloaded successfully."
           else
             echo "❌ OSV Scanner download failed or is corrupted."
-            cat osv-scanner  # Print content to debug if it's an error page
+            cat osv-scanner
             exit 1
           fi
 
@@ -221,6 +221,8 @@ jobs:
             exit 0
           fi
 
+          echo "🔍 Using lock file: $LOCKFILE"
+
           ./osv-scanner --lockfile="$LOCKFILE" --json | tee osv-scan-output.json
 
           if [ ! -s osv-scan-output.json ]; then
@@ -228,11 +230,11 @@ jobs:
             exit 0
           fi
 
-          VULNERABILITIES=$(jq '.vulnerabilities' osv-scan-output.json || echo "")
+          VULNERABILITIES=$(jq '[.results[].packages[].vulnerabilities[]?] | select(length > 0)' osv-scan-output.json || echo "")
 
           if [[ -n "$VULNERABILITIES" && "$VULNERABILITIES" != "null" && "$VULNERABILITIES" != "[]" ]]; then
-            echo "🚨 Vulnerabilities detected:"
-            echo "$VULNERABILITIES" | jq -r '.[] | "\(.package) (\(.version)) - \(.id)"'
+            echo "🚨 Vulnerabilities detected!"
+            echo "$VULNERABILITIES" | jq -r '.[] | "🔴 \(.id) - \(.summary)"'
             echo "PENDING_VULNS=$(echo "$VULNERABILITIES" | base64 -w 0)" >> $GITHUB_ENV
           else
             echo "✅ No vulnerabilities found."
