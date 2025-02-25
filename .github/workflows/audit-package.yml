@@ -241,42 +241,74 @@ jobs:
             echo "✅ No vulnerabilities found."
           fi
 
-      - name: Comment on PR with Remaining Vulnerabilities
+      - name: Add or Update PR Comment for Unfixable Vulnerabilities
         if: env.PENDING_VULNS != ''
         run: |
-          PR_COMMENT="🚨 *Post-audit scan detected remaining vulnerabilities.* \n\n"
-          PR_COMMENT+="**OSV Scanner Findings:**\n\`\`\`\n$(echo $PENDING_VULNS | base64 -d | jq -r '.[].id')\n\`\`\`\n\n"
-          PR_COMMENT+="@maintained-actions-dev, please investigate."
+          PR_COMMENT_BODY="🚨 *Post-audit scan detected remaining vulnerabilities.* \n\n"
+          PR_COMMENT_BODY+="**OSV Scanner Findings:**\n\`\`\`\n$(echo $PENDING_VULNS | base64 -d | jq -r '.[].id')\n\`\`\`\n\n"
+          PR_COMMENT_BODY+="please investigate."
 
-          curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            -d "{\"body\": \"$PR_COMMENT\"}" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments"
+          EXISTING_COMMENT_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments" \
+            | jq -r '.[] | select(.body | contains("Post-audit scan detected remaining vulnerabilities")) | .id')
 
-      - name: Create Issue for Unfixable Vulnerabilities
+          if [[ -n "$EXISTING_COMMENT_ID" && "$EXISTING_COMMENT_ID" != "null" ]]; then
+            echo "🔄 Updating existing PR comment ($EXISTING_COMMENT_ID)..."
+            curl -s -X PATCH -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"body\": \"$PR_COMMENT_BODY\"}" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/comments/$EXISTING_COMMENT_ID"
+          else
+            echo "📝 Creating new PR comment..."
+            curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"body\": \"$PR_COMMENT_BODY\"}" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments"
+          fi
+
+      - name: Create or Update Issue for Unfixable Vulnerabilities
         if: env.PENDING_VULNS != ''
         run: |
-          echo "Creating a GitHub Issue for unresolved vulnerabilities..."
+          echo "🔍 Checking for existing security issue..."
+          
+          EXISTING_ISSUE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/issues?state=open" \
+            | jq -r '.[] | select(.title == "Security Alert: Unfixable Vulnerabilities") | .number')
 
           ISSUE_BODY="🚨 *OSV Scanner found unresolved vulnerabilities after audit fix.* \n\n"
           ISSUE_BODY+="**Vulnerabilities in \`${{ inputs.package_manager }}\`:**\n\`\`\`\n$(echo $PENDING_VULNS | base64 -d | jq -r '.[].id')\n\`\`\`\n\n"
           ISSUE_BODY+="please investigate."
 
-          ISSUE_RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github.v3+json" \
-            -d "{
-              \"title\": \"Security Alert: Unfixable Vulnerabilities\",
-              \"body\": \"$ISSUE_BODY\",
-               \"assignees\": [\"Raj-StepSecurity\"]
-            }" "https://api.github.com/repos/${{ github.repository }}/issues")
-
-          ISSUE_URL=$(echo "$ISSUE_RESPONSE" | jq -r '.html_url')
-
-          if [[ "$ISSUE_URL" == "null" || -z "$ISSUE_URL" ]]; then
-            echo "❌ Error: Issue creation failed. Full API response:"
-            echo "$ISSUE_RESPONSE"
-            exit 1
+          if [[ -n "$EXISTING_ISSUE" && "$EXISTING_ISSUE" != "null" ]]; then
+            echo "🔄 Updating existing issue #$EXISTING_ISSUE..."
+            
+            # Append new vulnerabilities to the existing issue
+            curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"body\": \"$ISSUE_BODY\"}" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/$EXISTING_ISSUE/comments"
+            
+            echo "✅ Issue updated: https://github.com/${{ github.repository }}/issues/$EXISTING_ISSUE"
+          
           else
-            echo "✅ Issue created: $ISSUE_URL"
+            echo "📝 Creating a new GitHub Issue for unresolved vulnerabilities..."
+            
+            ISSUE_RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{
+                \"title\": \"Security Alert: Unfixable Vulnerabilities\",
+                \"body\": \"$ISSUE_BODY\",
+                \"assignees\": [\"Raj-StepSecurity\"]
+              }" "https://api.github.com/repos/${{ github.repository }}/issues")
+
+            ISSUE_URL=$(echo "$ISSUE_RESPONSE" | jq -r '.html_url')
+
+            if [[ "$ISSUE_URL" == "null" || -z "$ISSUE_URL" ]]; then
+              echo "❌ Error: Issue creation failed. Full API response:"
+              echo "$ISSUE_RESPONSE"
+              exit 1
+            else
+              echo "✅ New issue created: $ISSUE_URL"
+            fi
           fi
 
