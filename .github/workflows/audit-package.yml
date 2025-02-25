@@ -275,21 +275,33 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/issues?state=open" \
             | jq -r '.[] | select(.title == "Security Alert: Unfixable Vulnerabilities") | .number')
 
+          NEW_VULNS=$(echo $PENDING_VULNS | base64 -d | jq -r '.[].id')
           ISSUE_BODY="🚨 *OSV Scanner found unresolved vulnerabilities after audit fix.* \n\n"
-          ISSUE_BODY+="**Vulnerabilities in \`${{ inputs.package_manager }}\`:**\n\`\`\`\n$(echo $PENDING_VULNS | base64 -d | jq -r '.[].id')\n\`\`\`\n\n"
-          ISSUE_BODY+="please investigate."
+          ISSUE_BODY+="**Vulnerabilities in \`${{ inputs.package_manager }}\`:**\n\`\`\`\n$NEW_VULNS\n\`\`\`\n\n"
+          ISSUE_BODY+="@Raj-StepSecurity, please investigate."
 
           if [[ -n "$EXISTING_ISSUE" && "$EXISTING_ISSUE" != "null" ]]; then
             echo "🔄 Updating existing issue #$EXISTING_ISSUE..."
-            
-            # Append new vulnerabilities to the existing issue
-            curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Accept: application/vnd.github.v3+json" \
-              -d "{\"body\": \"$ISSUE_BODY\"}" \
-              "https://api.github.com/repos/${{ github.repository }}/issues/$EXISTING_ISSUE/comments"
-            
-            echo "✅ Issue updated: https://github.com/${{ github.repository }}/issues/$EXISTING_ISSUE"
-          
+
+            EXISTING_BODY=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/issues/$EXISTING_ISSUE" \
+              | jq -r '.body')
+
+            EXISTING_VULNS=$(echo "$EXISTING_BODY" | grep -oP '(?<=\`\`\`\n)(.*)(?=\n\`\`\`)' || echo "")
+
+            if [[ "$EXISTING_VULNS" == "$NEW_VULNS" ]]; then
+              echo "✅ No new vulnerabilities detected. Issue remains unchanged."
+            else
+              UPDATED_ISSUE_BODY="$EXISTING_BODY\n\n🔄 **New Vulnerabilities Detected:**\n\`\`\`\n$NEW_VULNS\n\`\`\`\n"
+
+              curl -s -X PATCH -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                -d "{\"body\": \"$UPDATED_ISSUE_BODY\"}" \
+                "https://api.github.com/repos/${{ github.repository }}/issues/$EXISTING_ISSUE"
+
+              echo "✅ Issue updated: https://github.com/${{ github.repository }}/issues/$EXISTING_ISSUE"
+            fi
+
           else
             echo "📝 Creating a new GitHub Issue for unresolved vulnerabilities..."
             
