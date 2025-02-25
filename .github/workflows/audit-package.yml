@@ -182,7 +182,7 @@ jobs:
         run: |
           echo "Requesting review for PR #${{ env.PR_NUMBER }} from team maintained-actions-dev..."
           curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/orgs/step-security/teams" | jq -r '.[].slug'
+              "https://api.github.com/orgs/step-security/teams" | jq '.'
 
           curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               "https://api.github.com/repos/step-security/jest-coverage-action-demo/collaborators" | jq -r '.[].login'
