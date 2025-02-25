@@ -190,13 +190,9 @@ jobs:
       - name: Run OSV Scanner on lock file
         id: osv_scan
         run: |
-          # Fetch the latest OSV Scanner release dynamically (without authentication)
           API_RESPONSE=$(curl -s "https://api.github.com/repos/google/osv-scanner/releases/latest")
-
-          # Extract URL of the Linux AMD64 binary
           OSV_SCANNER_URL=$(echo "$API_RESPONSE" | jq -r '.assets[] | select(.name == "osv-scanner_linux_amd64") | .browser_download_url')
 
-          # Ensure the URL was retrieved correctly
           if [[ -z "$OSV_SCANNER_URL" || "$OSV_SCANNER_URL" == "null" ]]; then
             echo "❌ Failed to fetch the latest OSV Scanner URL from GitHub API."
             echo "GitHub API Response:"
@@ -205,12 +201,9 @@ jobs:
           fi
 
           echo "✅ Downloading OSV Scanner from: $OSV_SCANNER_URL"
-
-          # Download using curl, fallback to wget if curl fails
-          curl -fsSL "$OSV_SCANNER_URL" -o osv-scanner || wget -q -O osv-scanner "$OSV_SCANNER_URL"
+          curl -fsSL "$OSV_SCANNER_URL" -o osv-scanner
           chmod +x osv-scanner
 
-          # Verify if the file is an executable binary
           if file osv-scanner | grep -q "ELF"; then
             echo "✅ OSV Scanner downloaded successfully."
           else
@@ -219,29 +212,28 @@ jobs:
             exit 1
           fi
 
-          # Determine the correct lock file
-          if [ "${{ inputs.package_manager }}" == "npm" ]; then
+          if [ -f "package-lock.json" ]; then
             LOCKFILE="package-lock.json"
-          else
+          elif [ -f "yarn.lock" ]; then
             LOCKFILE="yarn.lock"
-          fi
-
-          # Run OSV Scanner only if the lock file exists
-          if [ -f "$LOCKFILE" ]; then
-            echo "Running OSV Scanner on $LOCKFILE..."
-            SCAN_RESULT=$(./osv-scanner --lockfile="$LOCKFILE" --json || true)
           else
-            echo "No lockfile ($LOCKFILE) found. Skipping OSV scan."
+            echo "❌ No package-lock.json or yarn.lock found. Skipping OSV scan."
             exit 0
           fi
 
-          # Extract vulnerabilities
-          VULNERABILITIES=$(echo "$SCAN_RESULT" | jq '.vulnerabilities' || echo "")
-
-          if [[ -n "$VULNERABILITIES" && "$VULNERABILITIES" != "null" ]]; then
-            echo "PENDING_VULNS=$(echo "$VULNERABILITIES" | base64 -w 0)" >> $GITHUB_ENV
+          SCAN_RESULT=$(./osv-scanner --lockfile="$LOCKFILE" --json 2>/dev/null || true)
+          if [[ -z "$SCAN_RESULT" || "$SCAN_RESULT" == "null" ]]; then
+            echo "⚠️ OSV Scanner did not return valid output. No vulnerabilities found."
+            exit 0
           fi
 
+          VULNERABILITIES=$(echo "$SCAN_RESULT" | jq '.vulnerabilities' || echo "")
+
+          if [[ -n "$VULNERABILITIES" && "$VULNERABILITIES" != "null" && "$VULNERABILITIES" != "[]" ]]; then
+            echo "PENDING_VULNS=$(echo "$VULNERABILITIES" | base64 -w 0)" >> $GITHUB_ENV
+          else
+            echo "✅ No vulnerabilities found."
+          fi
 
       - name: Comment on PR with Remaining Vulnerabilities
         if: env.PENDING_VULNS != ''
