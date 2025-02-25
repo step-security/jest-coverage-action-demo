@@ -253,7 +253,7 @@ jobs:
             "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments"
 
       - name: Create Issue for Unfixable Vulnerabilities
-        if: env.PENDING_VULNS != '' && env.PR_NUMBER == ''
+        if: env.PENDING_VULNS != ''
         run: |
           echo "Creating a GitHub Issue for unresolved vulnerabilities..."
 
