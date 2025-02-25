@@ -190,14 +190,21 @@ jobs:
       - name: Run OSV Scanner on lock file
         id: osv_scan
         run: |
-          # Fetch the latest OSV Scanner release dynamically
-          OSV_SCANNER_URL=$(curl -s https://api.github.com/repos/google/osv-scanner/releases/latest | jq -r '.assets[] | select(.name | contains("linux-amd64")) | .browser_download_url')
+          # Fetch the latest OSV Scanner release dynamically (without authentication)
+          API_RESPONSE=$(curl -s "https://api.github.com/repos/google/osv-scanner/releases/latest")
+
+          # Extract URL of the Linux AMD64 binary
+          OSV_SCANNER_URL=$(echo "$API_RESPONSE" | jq -r '.assets[] | select(.name == "osv-scanner_linux_amd64") | .browser_download_url')
 
           # Ensure the URL was retrieved correctly
           if [[ -z "$OSV_SCANNER_URL" || "$OSV_SCANNER_URL" == "null" ]]; then
             echo "❌ Failed to fetch the latest OSV Scanner URL from GitHub API."
+            echo "GitHub API Response:"
+            echo "$API_RESPONSE"
             exit 1
           fi
+
+          echo "✅ Downloading OSV Scanner from: $OSV_SCANNER_URL"
 
           # Download using curl, fallback to wget if curl fails
           curl -fsSL "$OSV_SCANNER_URL" -o osv-scanner || wget -q -O osv-scanner "$OSV_SCANNER_URL"
