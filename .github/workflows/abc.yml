@@ -162,6 +162,8 @@ jobs:
 
           echo "✅ All changes committed successfully."
 
+          git push --force origin ${{ env.BRANCH_NAME }}
+
       - name: Check for Existing Open PR
         if: env.changes == 'true'
         id: check_pr
