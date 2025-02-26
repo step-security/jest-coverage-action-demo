@@ -1,9 +1,9 @@
 name: Dependency Audit Fix and PR workflow_dispatch
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
-      workflow_dispatch:
+      package_manager:
         description: "Specify package manager (npm or yarn)"
         required: false
         type: string
