@@ -55,11 +55,6 @@ jobs:
           node-version: "20"
           cache: ${{ inputs.package_manager }}
 
-      - name: Set up Git User
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
       - name: Authenticate npm with GitHub Packages (if using private packages)
         if: inputs.use_private_packages == true
         run: |
@@ -88,16 +83,47 @@ jobs:
           fi
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
 
-      - name: Reset & Force Update PR Branch
+      - name: Fetch PR Number (If Open)
+        id: fetch_pr
         run: |
-          git fetch origin
-          if git rev-parse --verify origin/${{ env.BRANCH_NAME }} >/dev/null 2>&1; then
-            echo "Branch ${{ env.BRANCH_NAME }} exists. Resetting..."
-            git checkout ${{ env.BRANCH_NAME }}
-            git reset --hard origin/${{ inputs.base_branch }}
+          EXISTING_PR_NUMBER=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls?state=open" \
+            | jq -r --arg branch "${{ env.BRANCH_NAME }}" '.[] | select(.head.ref == $branch) | .number')
+
+          if [[ -n "$EXISTING_PR_NUMBER" && "$EXISTING_PR_NUMBER" != "null" ]]; then
+            echo "Existing open PR found: #$EXISTING_PR_NUMBER"
+            echo "EXISTING_PR_NUMBER=$EXISTING_PR_NUMBER" >> $GITHUB_ENV
           else
-            echo "Branch ${{ env.BRANCH_NAME }} does not exist. Creating..."
-            git checkout -b ${{ env.BRANCH_NAME }} origin/${{ inputs.base_branch }}
+            echo "No open PR found."
+            echo "EXISTING_PR_NUMBER=" >> $GITHUB_ENV
+          fi
+  
+      - name: Reset & Update PR Branch Using API
+        run: |
+          echo "🔍 Checking if branch ${{ env.BRANCH_NAME }} exists..."
+
+          BRANCH_RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/git/refs/heads/${{ env.BRANCH_NAME }}")
+
+          BRANCH_EXISTS=$(echo "$BRANCH_RESPONSE" | jq -r '.ref // empty')
+
+          BASE_COMMIT_SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/git/refs/heads/${{ inputs.base_branch }}" | jq -r '.object.sha')
+
+          if [[ -n "$BRANCH_EXISTS" ]]; then
+            echo "🔄 Branch ${{ env.BRANCH_NAME }} exists. Resetting to match ${{ inputs.base_branch }}"
+            curl -s -X PATCH -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"sha\": \"$BASE_COMMIT_SHA\", \"force\": true}" \
+              "https://api.github.com/repos/${{ github.repository }}/git/refs/heads/${{ env.BRANCH_NAME }}"
+            echo "✅ Branch ${{ env.BRANCH_NAME }} reset successfully."
+          else
+            echo "🆕 Branch ${{ env.BRANCH_NAME }} does not exist. Creating from ${{ inputs.base_branch }}..."
+            curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d "{\"ref\": \"refs/heads/${{ env.BRANCH_NAME }}\", \"sha\": \"$BASE_COMMIT_SHA\"}" \
+              "https://api.github.com/repos/${{ github.repository }}/git/refs"
+            echo "✅ New branch ${{ env.BRANCH_NAME }} created successfully."
           fi
 
       - name: Run Audit Fix
@@ -162,30 +188,46 @@ jobs:
 
           echo "✅ All changes committed successfully."
 
-
-      - name: Check for Existing Open PR by Branch Name
-        if: env.changes == 'true'
+      - name: Reopen PR If It Was Closed
+        if: env.changes == 'true' && env.EXISTING_PR_NUMBER != ''
         run: |
-          PR_NUMBER=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls?state=open" \
-            | jq -r --arg branch "${{ env.BRANCH_NAME }}" '.[] | select(.head.ref == $branch) | .number')
+          PR_STATE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/${{ env.EXISTING_PR_NUMBER }}" \
+            | jq -r '.state')
 
-          if [[ -z "$PR_NUMBER" || "$PR_NUMBER" == "null" ]]; then
-            echo "Creating new PR..."
+          if [[ "$PR_STATE" == "closed" ]]; then
+            echo "🔄 Reopening closed PR #${{ env.EXISTING_PR_NUMBER }}..."
+            curl -s -X PATCH -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              -d '{"state": "open"}' \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/${{ env.EXISTING_PR_NUMBER }}"
+            echo "✅ PR #${{ env.EXISTING_PR_NUMBER }} reopened."
           else
-            echo "Existing PR found: #$PR_NUMBER"
-            echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+            echo "PR #${{ env.EXISTING_PR_NUMBER }} is already open."
           fi
+          echo "PR_NUMBER=${{ env.EXISTING_PR_NUMBER }}" >> $GITHUB_ENV
+
 
       - name: Create PR (If Not Existing)
-        if: env.changes == 'true' && env.PR_NUMBER == ''
+        if: env.changes == 'true' && env.EXISTING_PR_NUMBER == ''
         run: |
-          curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          echo "No existing PR found. Creating new PR..."
+          PR_RESPONSE=$(curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             -d "{ \"title\": \"fix: Security updates\", \"head\": \"${{ env.BRANCH_NAME }}\", \"base\": \"${{ inputs.base_branch }}\", \"draft\": false }" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls"
+            "https://api.github.com/repos/${{ github.repository }}/pulls")
 
-          echo "✅ PR created successfully."
+          PR_NUMBER=$(echo "$PR_RESPONSE" | jq -r '.number')
+          PR_URL=$(echo "$PR_RESPONSE" | jq -r '.html_url')
+
+          if [[ "$PR_URL" == "null" || -z "$PR_URL" ]]; then
+            echo "❌ Error: PR creation failed. Full API response:"
+            echo "$PR_RESPONSE"
+            exit 1
+          else
+            echo "✅ Pull Request created: $PR_URL"
+            echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+          fi
 
       - name: Add or Update PR Comment for Audit Fixes
         if: env.PR_NUMBER != ''
