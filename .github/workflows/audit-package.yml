@@ -95,6 +95,10 @@ jobs:
             echo "Branch ${{ env.BRANCH_NAME }} exists. Resetting..."
             git checkout ${{ env.BRANCH_NAME }}
             git reset --hard origin/${{ inputs.base_branch }}
+          else
+            echo "Branch ${{ env.BRANCH_NAME }} does not exist. Creating..."
+            git checkout -b ${{ env.BRANCH_NAME }} origin/${{ inputs.base_branch }}
+          fi
 
       - name: Run Audit Fix
         run: |
