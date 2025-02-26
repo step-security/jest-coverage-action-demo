@@ -124,11 +124,56 @@ jobs:
             echo "changes=true" >> $GITHUB_ENV
           fi
 
-      - name: Commit and Force Push Changes
+      - name: Commit Changes Using GitHub API (Signed)
         if: env.changes == 'true'
         run: |
-          git commit -m "fix: apply audit fixes"
-          git push --force origin ${{ env.BRANCH_NAME }}
+          echo "Committing changes via GitHub API to ensure signed commits..."
+          
+          FILES_CHANGED=$(git status --porcelain | awk '{print $2}')
+
+          for file in $FILES_CHANGED; do
+            CONTENT=$(base64 -w 0 "$file")
+            FILE_PATH="$file"
+
+            SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/contents/$FILE_PATH?ref=${{ env.BRANCH_NAME }}" | jq -r .sha)
+
+            if [ "$SHA" == "null" ]; then
+              SHA=""
+            fi
+
+            COMMIT_MESSAGE="fix: apply audit fixes"
+            JSON_PAYLOAD=$(mktemp)
+            echo "{
+              \"message\": \"$COMMIT_MESSAGE\",
+              \"content\": \"$CONTENT\",
+              \"branch\": \"${{ env.BRANCH_NAME }}\",
+              \"sha\": \"$SHA\"
+            }" > "$JSON_PAYLOAD"
+
+            curl -s -X PUT -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              --data-binary @"$JSON_PAYLOAD" \
+              "https://api.github.com/repos/${{ github.repository }}/contents/$FILE_PATH"
+          done
+
+          echo "✅ Changes committed successfully."
+
+      - name: Force Push Branch Using API
+        run: |
+          echo "Forcing push of ${{ env.BRANCH_NAME }}..."
+          
+          # Get latest commit SHA after commits
+          LATEST_SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/git/refs/heads/${{ env.BRANCH_NAME }}" | jq -r '.object.sha')
+
+          # Force update branch to latest commit
+          curl -s -X PATCH -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            -d "{\"sha\": \"$LATEST_SHA\", \"force\": true}" \
+            "https://api.github.com/repos/${{ github.repository }}/git/refs/heads/${{ env.BRANCH_NAME }}"
+
+          echo "✅ Branch ${{ env.BRANCH_NAME }} force pushed successfully."
 
       - name: Check for Existing Open PR
         if: env.changes == 'true'
