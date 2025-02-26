@@ -114,7 +114,7 @@ jobs:
             echo "🔄 Branch ${{ env.BRANCH_NAME }} exists. Resetting to match ${{ inputs.base_branch }}"
             curl -s -X PATCH -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
-              -d "{\"sha\": \"$BASE_COMMIT_SHA\", \"force\": false}" \
+              -d "{\"sha\": \"$BASE_COMMIT_SHA\", \"force\": true}" \
               "https://api.github.com/repos/${{ github.repository }}/git/refs/heads/${{ env.BRANCH_NAME }}"
             echo "✅ Branch ${{ env.BRANCH_NAME }} reset successfully."
           else
