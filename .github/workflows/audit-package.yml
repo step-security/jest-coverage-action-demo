@@ -146,16 +146,33 @@ jobs:
           echo "Committing changes via GitHub API..."
           FILES_CHANGED=$(git status --porcelain | awk '{print $2}')
           for file in $FILES_CHANGED; do
+            echo "Processing file: $file"
+
             CONTENT=$(base64 -w 0 "$file")
+
             SHA=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               "https://api.github.com/repos/${{ github.repository }}/contents/$file?ref=${{ env.BRANCH_NAME }}" | jq -r .sha)
             if [ "$SHA" == "null" ]; then SHA=""; fi
+
+            # Prepare commit payload
+            JSON_PAYLOAD=$(mktemp)
+            echo "{
+              \"message\": \"fix: apply audit fixes\",
+              \"content\": \"$CONTENT\",
+              \"branch\": \"${{ env.BRANCH_NAME }}\",
+              \"sha\": \"$SHA\"
+            }" > "$JSON_PAYLOAD"
+
             curl -s -X PUT -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
-              -d "{\"message\": \"fix: apply audit fixes\", \"content\": \"$CONTENT\", \"branch\": \"${{ env.BRANCH_NAME }}\", \"sha\": \"$SHA\"}" \
+              --data-binary @"$JSON_PAYLOAD" \
               "https://api.github.com/repos/${{ github.repository }}/contents/$file"
+
+            echo "✅ File committed: $file"
           done
-          echo "✅ Changes committed successfully."
+
+          echo "✅ All changes committed successfully."
+
 
       - name: Check for Existing Open PR by Branch Name
         if: env.changes == 'true'
