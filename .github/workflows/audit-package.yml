@@ -287,9 +287,14 @@ jobs:
           PR_COMMENT_BODY+="**OSV Scanner Findings:**\n\`\`\`\n$(echo $PENDING_VULNS | base64 -d | jq -r '.[].id')\n\`\`\`\n\n"
           PR_COMMENT_BODY+="@${{ github.repository_owner }}/maintained-actions-dev, please investigate."
 
-          EXISTING_COMMENT_ID=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments" \
-            | jq -r '[.[] | select(.body | contains("Post-audit scan detected remaining vulnerabilities"))] | last | .id')
+          COMMENTS_RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${{ env.PR_NUMBER }}/comments")
+
+          if echo "$COMMENTS_RESPONSE" | jq -e 'type == "array"' >/dev/null; then
+            EXISTING_COMMENT_ID=$(echo "$COMMENTS_RESPONSE" | jq -r '[.[] | select(.body | contains("Post-audit scan detected remaining vulnerabilities"))] | last | .id')
+          else
+            EXISTING_COMMENT_ID=""
+          fi
 
           if [[ -n "$EXISTING_COMMENT_ID" && "$EXISTING_COMMENT_ID" != "null" ]]; then
             echo "🔄 Updating existing PR comment..."
