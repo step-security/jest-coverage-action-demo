@@ -61,16 +61,19 @@ jobs:
           BRANCH_NAME="auto-cherry-pick"
           BASE_BRANCH="${{ inputs.base_branch }}"
           PR_TITLE="chore: Cherry-picked changes from upstream"
+          echo "🔍 Checking for open PR with title: $PR_TITLE"
 
-          echo "🔍 Looking for existing PR from '$BRANCH_NAME' to '$BASE_BRANCH' or with title '$PR_TITLE'"
+          TITLE_MATCH=$(gh pr list --repo "$REPO" --state open --json number,title \
+            --jq ".[] | select(.title == \"$PR_TITLE\") | .number" | tr -d '\n')
+          echo "🔍 Checking for open PR from branch $BRANCH_NAME to $BASE_BRANCH"
 
-          PR_MATCH=$(gh pr list --repo "$REPO" --state open --json number,title,headRefName,baseRefName \
-            --jq ".[] | select((.title == \"$PR_TITLE\") or (.headRefName == \"$BRANCH_NAME\" and .baseRefName == \"$BASE_BRANCH\")) | .number")
+          BRANCH_MATCH=$(gh pr list --repo "$REPO" --state open --json number,headRefName,baseRefName \
+            --jq ".[] | select(.headRefName == \"$BRANCH_NAME\" and .baseRefName == \"$BASE_BRANCH\") | .number" | tr -d '\n')
 
-          if [ -n "$PR_MATCH" ]; then
-            echo "❌ A cherry-pick PR already exists (PR #$PR_MATCH)."
+          if [[ -n "$TITLE_MATCH" || -n "$BRANCH_MATCH" ]]; then
+            echo "❌ A cherry-pick PR already exists (PR #${TITLE_MATCH:-$BRANCH_MATCH})."
             echo "🔁 Please review and merge the existing PR before retrying."
-            exit 0
+            exit 1
           else
             echo "✅ No duplicate cherry-pick PRs found. Continuing workflow..."
           fi
@@ -107,11 +110,9 @@ jobs:
         run: |
           REPO="${{ github.repository }}"
           ISSUE_TITLE="Tracking Last Sync Date"
-
           ISSUE_NUMBER=$(gh issue list --repo "$REPO" --state open --json number,title \
             --jq ".[] | select(.title == \"$ISSUE_TITLE\") | .number")
           LAST_SYNC_DATE=""
-
           if [[ -n "$ISSUE_NUMBER" ]]; then
             echo "✅ Found existing sync tracking issue #$ISSUE_NUMBER."
             LAST_SYNC_DATE=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json body \
@@ -119,19 +120,14 @@ jobs:
             echo "📌 Last Sync Date from issue: $LAST_SYNC_DATE"
           else
             echo "⚠️ No tracking issue found. Checking latest release for fallback..."
-
             LATEST_RELEASE_DATE=$(gh release list --limit 1 --json publishedAt --jq '.[0].publishedAt')
-
             if [[ -z "$LATEST_RELEASE_DATE" ]]; then
               echo "⚠️ No releases found. Falling back to 1 month ago."
               LATEST_RELEASE_DATE=$(date -u --date='-1 month' +'%Y-%m-%dT%H:%M:%SZ')
             fi
-
             echo "🆕 Creating new tracking issue with sync date: $LATEST_RELEASE_DATE"
-
             ISSUE_URL=$(gh issue create --repo "$REPO" --title "$ISSUE_TITLE" \
               --body "Last Sync Date: $LATEST_RELEASE_DATE" | grep -oE 'https://github.com/[^ ]+')
-
             if [[ -z "$ISSUE_URL" ]]; then
               echo "❌ Failed to create issue."
               exit 1
@@ -140,10 +136,8 @@ jobs:
             LAST_SYNC_DATE=$LATEST_RELEASE_DATE
             echo "✅ Created new tracking issue #$ISSUE_NUMBER at $ISSUE_URL"
           fi
-
           echo "LAST_SYNC_DATE=$LAST_SYNC_DATE" >> $GITHUB_ENV
           echo "ISSUE_NUMBER=$ISSUE_NUMBER" >> $GITHUB_ENV
-
       - name: Get New Commits from Release After LAST_SYNC_DATE
         env:
           CHECK_DATE: ${{ env.LAST_SYNC_DATE }}
@@ -151,52 +145,41 @@ jobs:
           echo "🔍 Finding first release after: $CHECK_DATE"
           releases=$(gh release list --limit 100 --json tagName,publishedAt \
             --jq 'sort_by(.publishedAt) | .[] | [.tagName, .publishedAt] | @tsv')
-
           prev_tag=""
           prev_date=""
           found=false
           UPSTREAM_OWNER="${{ inputs.original-owner }}"
           UPSTREAM_REPO="${{ inputs.repo-name }}"
-
-
           while IFS=$'\t' read -r tag date; do
             if [[ "$date" > "$CHECK_DATE" && "$found" == "false" ]]; then
               echo "✅ Found release after $CHECK_DATE: $tag ($date)"
               echo "RELEASE_TAG=$tag" >> $GITHUB_ENV
               echo "RELEASE_DATE=$date" >> $GITHUB_ENV
-
               if [ -n "$prev_tag" ]; then
                 echo "↩️ Previous release: $prev_tag ($prev_date)"
                 echo "PREVIOUS_TAG=$prev_tag" >> $GITHUB_ENV
                 echo "PREVIOUS_DATE=$prev_date" >> $GITHUB_ENV
-
                 compare_result=$(gh api repos/$UPSTREAM_OWNER/$UPSTREAM_REPO/compare/$prev_tag...$tag)
                 commit_shas=$(echo "$compare_result" | jq -r '.commits[]?.sha')
               else
                 echo "⚠️ No previous release found. Using all commits in $tag"
                 commit_shas=$(gh api repos/${{ github.repository }}/commits?sha=$tag | jq -r '.[].sha')
               fi
-
               echo "🆕 Commits in release $tag:"
               echo "$commit_shas"
-
               echo "NEW_COMMITS<<EOF" >> $GITHUB_ENV
               echo "$commit_shas" >> $GITHUB_ENV
               echo "EOF" >> $GITHUB_ENV
-
               found=true
               break
             fi
-
             prev_tag="$tag"
             prev_date="$date"
           done <<< "$releases"
-
           if [ "$found" == "false" ]; then
             echo "❌ No release found after $CHECK_DATE"
             exit 0
           fi
-
 
       - name: Check for Existing PR
         id: check_pr
@@ -541,12 +524,10 @@ jobs:
             echo "❌ Error: No issue number found. Cannot update sync date."
             exit 1
           fi
-
           if [ -z "$SYNC_DATE" ]; then
             echo "❌ Error: No release date found. Cannot update sync date."
             exit 1
           fi
-
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --body "Last Sync Date: $SYNC_DATE"
           echo "✅ Updated issue #$ISSUE_NUMBER with release sync date: $SYNC_DATE"
 
