@@ -55,6 +55,26 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check for Existing Cherry-Pick PR by Title or Branch
+        run: |
+          REPO="${{ github.repository }}"
+          BRANCH_NAME="auto-cherry-pick"
+          BASE_BRANCH="${{ inputs.base_branch }}"
+          PR_TITLE="chore: Cherry-picked changes from upstream"
+
+          echo "🔍 Looking for existing PR from '$BRANCH_NAME' to '$BASE_BRANCH' or with title '$PR_TITLE'"
+
+          PR_MATCH=$(gh pr list --repo "$REPO" --state open --json number,title,headRefName,baseRefName \
+            --jq ".[] | select((.title == \"$PR_TITLE\") or (.headRefName == \"$BRANCH_NAME\" and .baseRefName == \"$BASE_BRANCH\")) | .number")
+
+          if [ -n "$PR_MATCH" ]; then
+            echo "❌ A cherry-pick PR already exists (PR #$PR_MATCH)."
+            echo "🔁 Please review and merge the existing PR before retrying."
+            exit 0
+          else
+            echo "✅ No duplicate cherry-pick PRs found. Continuing workflow..."
+          fi
+
       - name: Determine Action Type
         id: check-action
         run: |
@@ -511,6 +531,7 @@ jobs:
           fi
 
       - name: Update Last Sync Date via gh CLI
+        if: env.RELEASE_DATE != ''
         run: |
           REPO="${{ github.repository }}"
           ISSUE_NUMBER="${{ env.ISSUE_NUMBER }}"
