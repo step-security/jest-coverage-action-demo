@@ -85,7 +85,6 @@ jobs:
       - name: Get or Create Last Sync Date via gh CLI
         id: sync-date
         run: |
-          gh auth status || exit 1
           REPO="${{ github.repository }}"
           ISSUE_TITLE="Tracking Last Sync Date"
 
