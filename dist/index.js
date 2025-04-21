@@ -97,20 +97,16 @@ const processChangedFiles = async ({ filePatterns, allDiffFiles, inputs, yamlFil
             core.info('All Done!');
             core.endGroup();
         }
-        if (modifiedKeys.length > 0) {
-            await (0, utils_1.setArrayOutput)({
-                key: 'modified_keys',
-                inputs,
-                value: modifiedKeys
-            });
-        }
-        if (changedKeys.length > 0) {
-            await (0, utils_1.setArrayOutput)({
-                key: 'changed_keys',
-                inputs,
-                value: changedKeys
-            });
-        }
+        await (0, utils_1.setArrayOutput)({
+            key: 'modified_keys',
+            inputs,
+            value: modifiedKeys
+        });
+        await (0, utils_1.setArrayOutput)({
+            key: 'changed_keys',
+            inputs,
+            value: changedKeys
+        });
     }
     if (filePatterns.length === 0 && Object.keys(yamlFilePatterns).length === 0) {
         core.startGroup('changed-files-all');
@@ -1281,7 +1277,7 @@ const getSHAForPullRequestEvent = async ({ inputs, workingDirectory, isShallow, 
                             break;
                         }
                         core.info('Merge base is not in the local history, fetching remote target branch again...');
-                        core.info(`Attempt ${i}/10`);
+                        core.info(`Attempt ${i}/${inputs.fetchMissingHistoryMaxRetries || 10}`);
                     }
                 }
             }
