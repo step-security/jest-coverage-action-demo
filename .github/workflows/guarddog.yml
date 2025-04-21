@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   guarddog:
-    name: GuardDog - Full Scan (Own Code + Deps)
+    name: GuardDog - Full Scan
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -27,19 +27,15 @@ jobs:
       - name: Install GuardDog
         run: pip install guarddog
 
-      - name: 🔍 Scan dependencies (package.json)
-        id: deps_scan
-        continue-on-error: true
-        run: |
-          guarddog npm verify ./package.json --output-format json > guarddog_deps.json
-          count=$(jq '.results | length' guarddog_deps.json)
-          echo "count=$count" >> $GITHUB_OUTPUT
-          if [ "$count" -gt 0 ]; then
-            echo "❌ GuardDog found $count dependency issue(s)"
-            cat guarddog_deps.json
-          else
-            echo "✅ No dependency issues found in package.json"
-          fi
+      - name: 🧪 Scan dependencies (package.json)
+              run: guarddog npm verify ./package.json --output-format sarif > guarddog_deps.sarif
+
+      - name: 📤 Upload SARIF to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          category: guarddog-npm-dependencies
+          sarif_file: guarddog_deps.sarif
+
 
       - name: 🐶 Local files scan
         id: local_scan
