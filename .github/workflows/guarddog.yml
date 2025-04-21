@@ -34,7 +34,10 @@ jobs:
           done
 
           json_output=$(printf '%s\n' "${chunks[@]}" | jq -R . | jq -s '{batch: .}')
-          echo "matrix=$json_output" >> $GITHUB_OUTPUT
+          echo "matrix<<EOF" >> $GITHUB_OUTPUT
+          echo "$json_output" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
 
   guarddog-scan:
     needs: prepare-dependencies
