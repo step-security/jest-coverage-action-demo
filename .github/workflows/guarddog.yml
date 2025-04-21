@@ -1,9 +1,6 @@
 name: GuardDog Full Security Scan
 
 on:
-  workflow_call:
-
-on:
   push:
     branches: [main]
   pull_request:
