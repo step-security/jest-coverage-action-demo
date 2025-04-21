@@ -2825,6 +2825,10 @@ const getYamlFilePatterns = async ({ inputs, workingDirectory }) => {
                 filePatterns[key] = newIgnoreFilePatterns[key];
             }
         }
+        filePatterns = {
+            ...filePatterns,
+            ...newIgnoreFilePatterns
+        };
     }
     if (inputs.filesIgnoreYamlFromSourceFile) {
         const inputFilesIgnoreYamlFromSourceFile = inputs.filesIgnoreYamlFromSourceFile
