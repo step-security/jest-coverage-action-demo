@@ -27,16 +27,17 @@ jobs:
       - name: Install GuardDog
         run: pip install guarddog
 
-      - name: 🧪 Scan dependencies (package.json)
-        run: guarddog npm verify ./package.json
-
-
       - name: 🐶 Local files scan
         id: local_scan
         continue-on-error: true
         run: |
           guarddog npm scan .
 
+      - name: 🔍 Scan dependencies (package.json)
+        id: deps_scan
+        continue-on-error: true
+        run: |
+          guarddog npm verify ./package.json
 
       - name: ❗ Final check for failures
         run: |
