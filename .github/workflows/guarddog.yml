@@ -1,4 +1,4 @@
-name: GuardDog Full Security Scan
+name: GuardDog Matrix Scan
 
 on:
   push:
@@ -10,11 +10,39 @@ permissions:
   contents: read
 
 jobs:
-  guarddog:
-    name: GuardDog - Full Scan
+  prepare-dependencies:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract production dependencies
+        id: set-matrix
+        run: |
+          deps=$(jq -r '.dependencies | keys | @sh' package.json)
+          deps_array=($deps)
+
+          chunk_size=10
+          chunks=()
+          while [ ${#deps_array[@]} -gt 0 ]; do
+            chunk=("${deps_array[@]:0:$chunk_size}")
+            deps_array=("${deps_array[@]:$chunk_size}")
+            chunk_joined=$(printf ",%s" "${chunk[@]}")
+            chunk_joined=${chunk_joined:1}  # Remove leading comma
+            chunks+=("$chunk_joined")
+          done
+
+          json_output=$(printf '%s\n' "${chunks[@]}" | jq -R . | jq -s '{batch: .}')
+          echo "matrix=$json_output" >> $GITHUB_OUTPUT
+
+  guarddog-scan:
+    needs: prepare-dependencies
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        batch: ${{fromJson(needs.prepare-dependencies.outputs.matrix).batch}}
+    name: GuardDog Scan - Batch ${{ matrix.batch }}
 
     steps:
       - uses: actions/checkout@v4
@@ -27,33 +55,58 @@ jobs:
       - name: Install GuardDog
         run: pip install guarddog
 
+      - name: Scan selected dependencies
+        run: |
+          mkdir scan-tmp && cd scan-tmp
+
+          # Convert comma-separated list back to individual deps
+          IFS=',' read -ra DEPS <<< "${{ matrix.batch }}"
+          echo "Scanning: ${DEPS[@]}"
+
+          for dep in "${DEPS[@]}"; do
+            echo "Fetching metadata for $dep"
+            npm pack "$dep" &>/dev/null || continue
+            pkg_file=$(ls *.tgz | head -n 1)
+            mkdir -p pkg && tar -xzf "$pkg_file" -C pkg --strip-components=1
+            guarddog npm scan ./pkg --output-format json > "$dep.json"
+            cat "$dep.json"
+
+            count=$(jq '[.results[] | select(length > 0)] | length' "$dep.json")
+            if [ "$count" -gt 0 ]; then
+              echo "❌ GuardDog found issues in $dep"
+              exit 1
+            fi
+
+            rm -rf pkg *.tgz "$dep.json"
+          done
+
+      - name: ✅ Done with batch
+        run: echo "✅ No issues found in batch ${{ matrix.batch }}"
+
+  guarddog-local-scan:
+    runs-on: ubuntu-latest
+    name: GuardDog Local Files Scan
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install GuardDog
+        run: pip install guarddog
+
       - name: 🐶 Local files scan
-        id: local_scan
         run: |
           guarddog npm scan . --output-format json > guarddog_local.json
           cat guarddog_local.json
 
           count=$(jq '[.results[] | select(length > 0)] | length' guarddog_local.json)
-          echo "count=$count" >> $GITHUB_OUTPUT
+          echo "Local issues found: $count"
           if [ "$count" -gt 0 ]; then
             echo "❌ GuardDog found $count local issue(s)"
-            cat guarddog_local.json
             exit 1
           else
             echo "✅ No local issues found"
           fi
-
-      - name: 🔍 Dependency scan (package.json)
-        run: |
-          guarddog npm verify ./package.json --output-format json > guarddog_deps.json
-          cat guarddog_deps.json
-
-          count=$(jq '[.results[] | select(length > 0)] | length' guarddog_deps.json)
-          echo "Dependency issues found: $count"
-          if [ "$count" -gt 0 ]; then
-            echo "❌ GuardDog found $count dependency issue(s)"
-            exit 1
-          else
-            echo "✅ No dependency issues found"
-          fi
-
