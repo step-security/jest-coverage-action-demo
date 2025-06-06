@@ -38,6 +38,11 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@0634a2670c59f64b4a01f0f96f84700a4088b9f0 # v2.12.0
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -93,7 +98,7 @@ jobs:
       - name: Push changes
         if: steps.changed_files.outputs.files_changed == 'true' && github.event_name == 'pull_request'
         continue-on-error: true
-        uses: ad-m/github-push-action@master
+        uses: ad-m/github-push-action@77c5b412c50b723d2a4fbc6d71fb5723bcd439aa # master
         with:
           github_token: ${{ secrets.PAT_TOKEN }}
           branch: ${{ github.head_ref }}
@@ -105,7 +110,7 @@ jobs:
           path: dist
 
       - name: Run codacy-coverage-reporter
-        uses: codacy/codacy-coverage-reporter-action@v1
+        uses: codacy/codacy-coverage-reporter-action@89d6c85cfafaec52c72b6c5e8b2878d33104c699 # v1.3.0
         continue-on-error: true
         with:
           project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
