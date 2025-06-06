@@ -489,22 +489,20 @@
   integrity sha512-0/gtPNTY3++0J2BZM5nHHULg0BIMw886gqdn8vWN+Av6bgF5ZU2qIcHubAn+Z9KNvJhO8WFE+9kDOU3n6OcKtA==
 
 "@technote-space/github-action-helper@^5.3.10", "@technote-space/github-action-helper@^5.3.8":
-  version "5.3.10"
-  resolved "https://registry.yarnpkg.com/@technote-space/github-action-helper/-/github-action-helper-5.3.10.tgz#d9f7300048c2c3aa7297fdbf569b0739983f2a55"
-  integrity sha512-g3fbBSQcq4VzOS8Nk8gbJxs/LqmdfKixzhgy2gi09lsxW5thYSGtKES8wlfp5AN5MrDxg8JoTOq4Cuu3X3fSog==
+  version "5.3.17"
+  resolved "https://registry.yarnpkg.com/@technote-space/github-action-helper/-/github-action-helper-5.3.17.tgz#e29d406ecd5cf8fd7551260092c18d8e720d03be"
+  integrity sha512-lrS8fLRX4PBLPLe4Ygz0MxBVYO9YjSSGrAdbg5V641H5uJTw+nD6akDTs/WnUCMUEF0pthP6cbzRnC7DABEckQ==
   dependencies:
     "@actions/core" "^1.10.0"
     "@actions/github" "^5.1.1"
-    "@octokit/openapi-types" "^14.0.0"
-    "@octokit/plugin-rest-endpoint-methods" "^6.7.0"
-    "@technote-space/github-action-log-helper" "^0.2.9"
+    "@technote-space/github-action-log-helper" "^0.2.19"
     shell-escape "^0.2.0"
     sprintf-js "^1.1.2"
 
-"@technote-space/github-action-log-helper@^0.2.8", "@technote-space/github-action-log-helper@^0.2.9":
-  version "0.2.9"
-  resolved "https://registry.yarnpkg.com/@technote-space/github-action-log-helper/-/github-action-log-helper-0.2.9.tgz#8d054e497a2c5ae4c47297fcebb5ca43dba35e00"
-  integrity sha512-CnMsFGmCHUTxEC+CfKQv40aan8Ga1E86EVOsKAA691IZHvFo4R1RSSuWHfcermJxJIcnTuxyEU/yDqN/vdSI/w==
+"@technote-space/github-action-log-helper@^0.2.19", "@technote-space/github-action-log-helper@^0.2.8", "@technote-space/github-action-log-helper@^0.2.9":
+  version "0.2.19"
+  resolved "https://registry.yarnpkg.com/@technote-space/github-action-log-helper/-/github-action-log-helper-0.2.19.tgz#9f693dc5baccf3615f0bdde4ea3903df51574023"
+  integrity sha512-WkGQOqdcSbMGtnU92loB+gY9dgbbBKViUIunOAiUy9hYRz3gCdE5blcj247cVoOzUhssPbVQJQKxG+DHg2plHQ==
   dependencies:
     "@actions/core" "^1.10.0"
     sprintf-js "^1.1.2"
