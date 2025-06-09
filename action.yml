@@ -1,332 +1,160 @@
-name: Changed Files
-description: Get all Added, Copied, Modified, Deleted, Renamed, Type changed, Unmerged, and Unknown files.
-author: step-security
+name: 'Publish Test Results'
+author: 'step-security'
+description: 'Publishes JUnit, NUnit, XUnit, TRX, JSON test results on GitHub for .NET, Dart, Java, JS, Jest, Mocha, Python, Scala, …'
 
 inputs:
-  separator:
-    description: "Split character for output strings."
+  github_token:
+    description: 'GitHub API Access Token.'
+    default: ${{ github.token }}
     required: false
-    default: " "
-  include_all_old_new_renamed_files:
-    description: "Include `all_old_new_renamed_files` output. Note this can generate a large output See: #501."
+  github_token_actor:
+    description: 'The name of the GitHub app that owns the GitHub API Access Token (see github_token). Used to identify pull request comments created by this action during earlier runs. Has to be set when `github_token` is set to a GitHub app installation token (other than GitHub actions). Otherwise, existing comments will not be updated, but new comments created. Note: this does not change the bot name of the pull request comments. Defaults to "github-actions".'
+    default: 'github-actions'
     required: false
-    default: "false"
-  old_new_separator:
-    description: "Split character for old and new filename pairs."
+  github_retries:
+    description: 'Requests to the GitHub API are retried this number of times. The value must be a positive integer or zero.'
+    default: '10'
     required: false
-    default: ","
-  old_new_files_separator:
-    description: "Split character for old and new renamed filename pairs."
+  ssl_verify:
+    description: 'Either "true" or "false", in which case it controls whether to verify the Github server’s TLS certificate, or a string, in which case it must be a path to a CA bundle to use. Default is "true".'
+    default: true
     required: false
-    default: " "
-  files_from_source_file:
-    description: "Source file(s) used to populate the `files` input."
+  commit:
+    description: 'Commit SHA to which test results are published. Only needed if the value of GITHUB_SHA does not work for you.'
     required: false
-    default: ""
-  files_from_source_file_separator:
-    description: "Separator used to split the `files_from_source_file` input."
-    default: "\n"
+  check_name:
+    description: 'Name of the created check run.'
+    default: 'Test Results'
+    required: false
+  comment_title:
+    description: 'An alternative title for the pull request comment. Defaults to value of check_name input.'
+    required: false
+  comment_mode:
+    description: 'The action posts comments to pull requests that are associated with the commit. Set to "always" - always comment, "changes" - comment when changes w.r.t. the target branch exist, "changes in failures" - when changes in the number of failures and errors exist, "changes in errors" - when changes in the number of (only) errors exist, "failures" - when failures or errors exist, "errors" - when (only) errors exist, "off" - to not create pull request comments.'
+    default: 'always'
+    required: false
+  fail_on:
+    description: 'The created test result check run has failure state if any test fails or test errors occur. Never fails when set to "nothing", fails only on errors when set to "errors". Default is "test failures".'
+    default: 'test failures'
+    required: false
+  action_fail:
+    description: 'When set "true", the action itself fails when tests have failed (see option fail_on).'
+    default: 'false'
+    required: false
+  action_fail_on_inconclusive:
+    description: 'When set "true", the action itself fails when tests are inconclusive (no test results).'
+    default: 'false'
     required: false
   files:
-    description: |
-      File and directory patterns used to detect changes (Defaults to the entire repo if unset).
-      NOTE: Multiline file/directory patterns should not include quotes.
+    description: 'File patterns of test result files. Relative paths are known to work best, while the non-Docker action also works with absolute paths. Supports "*", "**", "?", and "[]" character ranges. Use multiline string for multiple patterns. Patterns starting with "!" exclude the matching files. There have to be at least one pattern starting without a "!".'
     required: false
-    default: ""
-  files_separator:
-    description: "Separator used to split the `files` input"
-    default: "\n"
+  junit_files:
+    description: 'Deprecated, use "files" option instead.'
     required: false
-  files_yaml:
-    description: "YAML used to define a set of file patterns to detect changes"
+  nunit_files:
+    description: 'Deprecated, use "files" option instead.'
     required: false
-    default: ""
-  files_yaml_from_source_file:
-    description: "Source file(s) used to populate the `files_yaml` input. Example: https://github.com/step-security/changed-files/blob/main/test/changed-files.yml"
+  xunit_files:
+    description: 'Deprecated, use "files" option instead.'
     required: false
-    default: ""
-  files_yaml_from_source_file_separator:
-    description: 'Separator used to split the `files_yaml_from_source_file` input'
-    default: "\n"
+  trx_files:
+    description: 'Deprecated, use "files" option instead.'
     required: false
-  files_ignore_yaml:
-    description: "YAML used to define a set of file patterns to ignore changes"
+  time_unit:
+    description: 'Time values in the test result files have this unit. Supports "seconds" and "milliseconds".'
+    default: 'seconds'
     required: false
-    default: ""
-  files_ignore_yaml_from_source_file:
-    description: "Source file(s) used to populate the `files_ignore_yaml` input. Example: https://github.com/step-security/changed-files/blob/main/test/changed-files.yml"
+  test_file_prefix:
+    description: 'Paths in the test result files should be relative to the git repository for annotations to work best. This prefix is added to (if starting with "+"), or remove from (if starting with "-") test file paths. Examples: "+src/" or "-/opt/actions-runner".'
     required: false
-    default: ""
-  files_ignore_yaml_from_source_file_separator:
-    description: 'Separator used to split the `files_ignore_yaml_from_source_file` input'
-    default: "\n"
+  report_individual_runs:
+    description: 'Individual runs of the same test may see different failures. Reports all individual failures when set "true" or the first only otherwise.'
     required: false
-  files_ignore:
-    description: "Ignore changes to these file(s). NOTE: Multiline file/directory patterns should not include quotes."
+  report_suite_logs:
+    description: 'In addition to reporting regular test logs, also report test suite logs. These are logs provided on suite level, not individual test level. Set to "info" for normal output, "error" for error output, "any" for both, or "none" for no suite logs at all. Defaults to "none".'
+    default: 'none'
     required: false
-    default: ""
-  files_ignore_separator:
-    description: "Separator used to split the `files_ignore` input"
-    default: "\n"
+  deduplicate_classes_by_file_name:
+    description: 'De-duplicates classes with same name by their file name when set "true", combines test results for those classes otherwise.'
     required: false
-  files_ignore_from_source_file:
-    description: "Source file(s) used to populate the `files_ignore` input"
+  large_files:
+    description: 'Support for large files is enabled when set to "true". Defaults to "false", unless ignore_runs is "true".'
     required: false
-    default: ""
-  files_ignore_from_source_file_separator:
-    description: 'Separator used to split the `files_ignore_from_source_file` input'
-    default: "\n"
+  ignore_runs:
+    description: 'Does not collect test run information from the test result files, which is useful for very large files. This disables any check run annotations.'
+    default: 'false'
     required: false
-  sha:
-    description: "Specify a different commit SHA or branch used for comparing changes"
+  check_run:
+    description: 'Set to "true", the results are published as a check run, but it may not be associated with the workflow that ran this action.'
+    default: 'true'
     required: false
-  base_sha:
-    description: "Specify a different base commit SHA or branch used for comparing changes"
+  job_summary:
+    description: 'Set to "true", the results are published as part of the job summary page of the workflow run.'
+    default: 'true'
     required: false
-  since:
-    description: "Get changed files for commits whose timestamp is older than the given time."
+  compare_to_earlier_commit:
+    description: 'Test results are compared to results of earlier commits to highlight changes: "false" - disable comparison, "true" - compare across commits.'
+    default: 'true'
     required: false
-    default: ""
-  until:
-    description: "Get changed files for commits whose timestamp is earlier than the given time."
+  pull_request_build:
+    description: 'As part of pull requests, GitHub builds a merge commit, which combines the commit and the target branch. If tests ran on the actual pushed commit, then set this to "commit". Defaults to "merge".'
+    default: 'merge'
     required: false
-    default: ""
-  path:
-    description: "Specify a relative path under `$GITHUB_WORKSPACE` to locate the repository."
+  event_file:
+    description: 'An alternative event file to use. Useful to replace a "workflow_run" event file with the actual source event file.'
     required: false
-    default: "."
-  quotepath:
-    description: "Use non-ASCII characters to match files and output the filenames completely verbatim by setting this to `false`"
-    default: "true"
+  event_name:
+    description: 'An alternative event name to use. Useful to replace a "workflow_run" event name with the actual source event name: github.event.workflow_run.event.'
     required: false
-  diff_relative:
-    description: "Exclude changes outside the current directory and show path names relative to it. NOTE: This requires you to specify the top-level directory via the `path` input."
+  test_changes_limit:
+    description: 'Limits the number of removed or skipped tests reported on pull request comments. This report can be disabled with a value of 0. The default is 10.'
     required: false
-    default: "true"
-  dir_names:
-    default: "false"
-    description: "Output unique changed directories instead of filenames. NOTE: This returns `.` for changed files located in the current working directory which defaults to `$GITHUB_WORKSPACE`."
+  check_run_annotations:
+    description: 'Adds additional information to the check run. This is a comma-separated list of any of the following values: "all tests" - list all found tests, "skipped tests" - list all skipped tests. Set to "none" to add no extra annotations at all.'
+    default: 'all tests, skipped tests'
     required: false
-  dir_names_max_depth:
-    description: "Limit the directory output to a maximum depth e.g `test/test1/test2` with max depth of `2` returns `test/test1`."
+  check_run_annotations_branch:
+    description: 'Adds check run annotations only on given branches. Comma-separated list of branch names allowed, asterisk "*" matches all branches. Defaults to event.repository.default_branch or "main, master".'
     required: false
-  dir_names_exclude_current_dir:
-    description: "Exclude the current directory represented by `.` from the output when `dir_names` is set to `true`."
+  seconds_between_github_reads:
+    description: 'Sets the number of seconds the action waits between concurrent read requests to the GitHub API. This throttles the API usage to avoid abuse rate limits: https://docs.github.com/en/rest/overview/resources-in-the-rest-api#abuse-rate-limits.'
+    default: '0.25'
     required: false
-    default: "false"
-  dir_names_include_files:
-    description: "File and directory patterns to include in the output when `dir_names` is set to `true`. NOTE: This returns only the matching files and also the directory names."
+  seconds_between_github_writes:
+    description: 'Sets the number of seconds the action waits between concurrent write requests to the GitHub API. This throttles the API usage to avoid abuse rate limits: https://docs.github.com/en/rest/overview/resources-in-the-rest-api#abuse-rate-limits.'
+    default: '2.0'
     required: false
-    default: ""
-  dir_names_include_files_separator:
-    description: "Separator used to split the `dir_names_include_files` input"
-    default: "\n"
+  secondary_rate_limit_wait_seconds:
+    description: 'Sets the number of seconds to wait before retrying secondary rate limit errors. If not set, the default defined in the PyGithub library is used (currently 60 seconds).'
     required: false
-  dir_names_deleted_files_include_only_deleted_dirs:
-    description: "Include only directories that have been deleted as opposed to directory names of files that have been deleted in the `deleted_files` output when `dir_names` is set to `true`."
+  json_file:
+    description: 'Results are written to this JSON file.'
     required: false
-    default: "false"
-  json:
-    description: "Output list of changed files in a JSON formatted string which can be used for matrix jobs. Example: https://github.com/step-security/changed-files/blob/main/.github/workflows/matrix-example.yml"
+  json_thousands_separator:
+    description: 'Formatted numbers in JSON use this character to separate groups of thousands. Common values are "," or ".". Defaults to punctuation space (\u2008).'
+    default: ' '
     required: false
-    default: "false"
-  escape_json:
-    description: "Escape JSON output."
+  json_suite_details:
+    description: 'Write out all suite details to the JSON file. Setting this to "true" can greatly increase the size of the output. Defaults to "false".'
+    default: 'false'
     required: false
-    default: "true"
-  safe_output:
-    description: "Apply sanitization to output filenames before being set as output."
+  json_test_case_results:
+    description: 'Write out all individual test case results to the JSON file. Setting this to "true" can greatly increase the size of the output. Defaults to "false".'
+    default: 'false'
     required: false
-    default: "true"
-  fetch_depth:
-    description: "Depth of additional branch history fetched. NOTE: This can be adjusted to resolve errors with insufficient history."
+  search_pull_requests:
+    description: 'Prior to v2.6.0, the action used the "/search/issues" REST API to find pull requests related to a commit. If you need to restore that behaviour, set this to "true". Defaults to "false".'
+    default: 'false'
     required: false
-    default: "25"
-  skip_initial_fetch:
-    description: |
-      Skip initially fetching additional history to improve performance for shallow repositories.
-      NOTE: This could lead to errors with missing history. It's intended to be used when you've fetched all necessary history to perform the diff.
-    required: false
-    default: "false"
-  fetch_additional_submodule_history:
-    description: "Fetch additional history for submodules."
-    required: false
-    default: "false"
-  since_last_remote_commit:
-    description: "Use the last commit on the remote branch as the `base_sha`. Defaults to the last non-merge commit on the target branch for pull request events and the previous remote commit of the current branch for push events."
-    required: false
-    default: "false"
-  write_output_files:
-    description: "Write outputs to the `output_dir` defaults to `.github/outputs` folder. NOTE: This creates a `.txt` file by default and a `.json` file if `json` is set to `true`."
-    required: false
-    default: "false"
-  output_dir:
-    description: "Directory to store output files."
-    required: false
-    default: ".github/outputs"
-  output_renamed_files_as_deleted_and_added:
-    description: "Output renamed files as deleted and added files."
-    required: false
-    default: "false"
-  recover_deleted_files:
-    description: "Recover deleted files."
-    required: false
-    default: "false"
-  recover_deleted_files_to_destination:
-    description: "Recover deleted files to a new destination directory, defaults to the original location."
-    required: false
-    default: ""
-  recover_files:
-    description: |
-      File and directory patterns used to recover deleted files,
-      defaults to the patterns provided via the `files`, `files_from_source_file`, `files_ignore` and `files_ignore_from_source_file` inputs 
-      or all deleted files if no patterns are provided.
-    required: false
-    default: ""
-  recover_files_separator:
-    description: "Separator used to split the `recover_files` input"
-    default: "\n"
-    required: false
-  recover_files_ignore:
-    description: "File and directory patterns to ignore when recovering deleted files."
-    required: false
-    default: ""
-  recover_files_ignore_separator:
-    description: "Separator used to split the `recover_files_ignore` input"
-    default: "\n"
-    required: false
-  token:
-    description: "GitHub token used to fetch changed files from Github's API."
-    required: false
-    default: ${{ github.token }}
-  api_url:
-    description: "Github API URL."
-    required: false
-    default: ${{ github.api_url }}
-  use_rest_api:
-    description: "Force the use of Github's REST API even when a local copy of the repository exists"
-    required: false
-    default: "false"
-  fail_on_initial_diff_error:
-    description: "Fail when the initial diff fails."
-    required: false
-    default: "false"
-  fail_on_submodule_diff_error:
-    description: "Fail when the submodule diff fails."
-    required: false
-    default: "false"
-  negation_patterns_first:
-    description: "Apply the negation patterns first. NOTE: This affects how changed files are matched."
-    required: false
-    default: "false"
-  matrix:
-    description: "Output changed files in a format that can be used for matrix jobs. Alias for setting inputs `json` to `true` and `escape_json` to `false`."
-    required: false
-    default: "false"
-  exclude_submodules:
-    description: "Exclude changes to submodules."
-    required: false
-    default: "false"
-  fetch_missing_history_max_retries:
-    description: "Maximum number of retries to fetch missing history."
-    required: false
-    default: "20"
-  use_posix_path_separator:
-    description: "Use POSIX path separator `/` for output file paths on Windows."
-    required: false
-    default: "false"
-  tags_pattern:
-    description: "Tags pattern to include."
-    required: false
-    default: "*"
-  tags_ignore_pattern:
-    description: "Tags pattern to ignore."
-    required: false
-    default: ""
-
 
 outputs:
-  added_files:
-    description: "Returns only files that are Added (A)."
-  added_files_count:
-    description: "Returns the number of `added_files`"
-  copied_files:
-    description: "Returns only files that are Copied (C)."
-  copied_files_count:
-    description: "Returns the number of `copied_files`"
-  deleted_files:
-    description: "Returns only files that are Deleted (D)."
-  deleted_files_count:
-    description: "Returns the number of `deleted_files`"
-  modified_files:
-    description: "Returns only files that are Modified (M)."
-  modified_files_count:
-    description: "Returns the number of `modified_files`"
-  renamed_files:
-    description: "Returns only files that are Renamed (R)."
-  renamed_files_count:
-    description: "Returns the number of `renamed_files`"
-  all_old_new_renamed_files:
-    description:   "Returns only files that are Renamed and lists their old and new names. **NOTE:** This requires setting `include_all_old_new_renamed_files` to `true`. Also, keep in mind that this output is global and wouldn't be nested in outputs generated when the `*_yaml_*` input is used. (R)"
-  all_old_new_renamed_files_count:
-    description:   "Returns the number of `all_old_new_renamed_files`"
-  type_changed_files:
-    description: "Returns only files that have their file type changed (T)."
-  type_changed_files_count:
-    description: "Returns the number of `type_changed_files`"
-  unmerged_files:
-    description: "Returns only files that are Unmerged (U)."
-  unmerged_files_count:
-    description: "Returns the number of `unmerged_files`"
-  unknown_files:
-    description: "Returns only files that are Unknown (X)."
-  unknown_files_count:
-    description: "Returns the number of `unknown_files`"
-  all_changed_and_modified_files:
-    description: "Returns all changed and modified files i.e. a combination of (ACMRDTUX)"
-  all_changed_and_modified_files_count:
-    description: "Returns the number of `all_changed_and_modified_files`"
-  all_changed_files:
-    description: "Returns all changed files i.e. a combination of all added, copied, modified and renamed files (ACMR)"
-  all_changed_files_count:
-    description: "Returns the number of `all_changed_files`"
-  any_changed:
-    description: "Returns `true` when any of the filenames provided using the `files*` or `files_ignore*` inputs have changed. This defaults to `true` when no patterns are specified. i.e. *includes a combination of all added, copied, modified and renamed files (ACMR)*."
-  only_changed:
-    description: "Returns `true` when only files provided using the `files*` or `files_ignore*` inputs have changed. i.e. *includes a combination of all added, copied, modified and renamed files (ACMR)*."
-  other_changed_files:
-    description: "Returns all other changed files not listed in the files input i.e. includes a combination of all added, copied, modified and renamed files (ACMR)."
-  other_changed_files_count:
-    description: "Returns the number of `other_changed_files`"
-  all_modified_files:
-    description: "Returns all changed files i.e. a combination of all added, copied, modified, renamed and deleted files (ACMRD)."
-  all_modified_files_count:
-    description: "Returns the number of `all_modified_files`"
-  any_modified:
-    description: "Returns `true` when any of the filenames provided using the `files*` or `files_ignore*` inputs have been modified. This defaults to `true` when no patterns are specified. i.e. *includes a combination of all added, copied, modified, renamed, and deleted files (ACMRD)*."
-  only_modified:
-    description: "Returns `true` when only files provided using the `files*` or `files_ignore*` inputs have been modified. (ACMRD)."
-  other_modified_files:
-    description: "Returns all other modified files not listed in the files input i.e. a combination of all added, copied, modified, and deleted files (ACMRD)"
-  other_modified_files_count:
-    description: "Returns the number of `other_modified_files`"
-  any_deleted:
-    description: "Returns `true` when any of the filenames provided using the `files*` or `files_ignore*` inputs have been deleted. This defaults to `true` when no patterns are specified. (D)"
-  only_deleted:
-    description: "Returns `true` when only files provided using the `files*` or `files_ignore*` inputs have been deleted. (D)"
-  other_deleted_files:
-    description: "Returns all other deleted files not listed in the files input i.e. a combination of all deleted files (D)"
-  other_deleted_files_count:
-    description: "Returns the number of `other_deleted_files`"
-  modified_keys:
-    description: "Returns all modified YAML keys when the `files_yaml` input is used. i.e. key that contains any path that has either been added, copied, modified, and deleted (ACMRD)"
-  changed_keys:
-    description: "Returns all changed YAML keys when the `files_yaml` input is used. i.e. key that contains any path that has either been added, copied, modified, and renamed (ACMR)"
+  json:
+    description: "Test results as JSON"
 
 runs:
-  using: 'node20'
-  main: 'dist/index.js'
+  using: 'docker'
+  image: 'docker://ghcr.io/step-security/publish-unit-test-result-action@sha256:54ee43f7a641a20461b18f702735dcd5a8d2970bb788a41a60a7a50c0ada6189'  #v2.19.0
 
 branding:
-  icon: file-text
-  color: white
+  icon: 'check-circle'
+  color: 'green'
