@@ -1,4 +1,4 @@
-humanize==4.10.0
+humanize==4.12.3
 junitparser==3.2.0
 lxml==5.3.0
 psutil==6.1.0
