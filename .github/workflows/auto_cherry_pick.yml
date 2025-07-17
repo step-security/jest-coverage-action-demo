@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   cherry-pick:
-    uses: step-security/reusable-workflows/.github/workflows/auto_cherry_pick.yaml@fix_Reusable-Workflow-Issues
+    uses: step-security/reusable-workflows/.github/workflows/auto_cherry_pick.yaml@feature_Verify-Cherry-Pick
     with:
       original-owner: "EnricoMi"
       repo-name: "publish-unit-test-result-action"
