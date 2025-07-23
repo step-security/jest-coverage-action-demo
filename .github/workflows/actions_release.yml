@@ -16,6 +16,6 @@ jobs:
       actions: read
       id-token: write
       contents: write
-    uses: step-security/reusable-workflows/.github/workflows/actions_release.yaml@fix_Use-Audit-Fix-With-Mentioned-Directory
+    uses: step-security/reusable-workflows/.github/workflows/actions_release.yaml@feature/Add-PrevTag-In-Action-Release
     with:
       tag: "${{ github.event.inputs.tag }}"
