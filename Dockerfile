@@ -1,4 +1,4 @@
-FROM python:3.13-alpine@sha256:323a717dc4a010fee21e3f1aac738ee10bb485de4e7593ce242b36ee48d6b352
+FROM python:3.13.7-alpine@sha256:587df003ff48316a56a0ddac50e1e2b64dfeca281f0c071b91920895a65b12d2
 
 LABEL repository="https://github.com/step-security/publish-unit-test-result-action"
 LABEL homepage="https://github.com/step-security/publish-unit-test-result-action"
