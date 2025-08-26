@@ -7,6 +7,17 @@ on:
         description: "Base branch to create the PR against"
         required: true
         default: "main"
+      script:
+        description: "Specify the npm/yarn script to run if available"
+        required: false
+        default: "yarn build"
+      package_manager:
+        description: "Specify package manager if available (npm or yarn)"
+        required: false
+        default: "yarn"
+
+  pull_request:
+    types: [labeled, opened, synchronize]
 
 permissions:
   contents: write
@@ -16,8 +27,12 @@ permissions:
 
 jobs:
   cherry-pick:
+    if: github.event_name == 'workflow_dispatch' || contains(fromJson(toJson(github.event.pull_request.labels)).*.name, 'review-required')
     uses: step-security/reusable-workflows/.github/workflows/auto_cherry_pick.yaml@v1
     with:
-      original-owner: "EnricoMi"
-      repo-name: "publish-unit-test-result-action"
+      original-owner: "amannn"
+      repo-name: "action-semantic-pull-request"
       base_branch: ${{ inputs.base_branch }}
+      script: ${{ inputs.script }}
+      package_manager: ${{ inputs.package_manager }}
+      mode: ${{ github.event_name == 'pull_request' && 'verify' || inputs.mode }}
