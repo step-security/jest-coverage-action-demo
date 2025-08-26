@@ -40,4 +40,4 @@ jobs:
       script: ${{ inputs.script }}
       package_manager: ${{ inputs.package_manager }}
       mode: ${{ github.event_name == 'pull_request' && 'verify' || inputs.mode }}
-      node_version: ${{ inputs.base_branch || "24" }}
+      node_version: ${{ inputs.node_version || '24' }}
