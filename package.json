@@ -34,7 +34,7 @@
   "devDependencies": {
     "@rollup/plugin-commonjs": "^28.0.6",
     "@rollup/plugin-json": "^6.1.0",
-    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-node-resolve": "^16.0.2",
     "conventional-changelog-conventionalcommits": "^9.1.0",
     "eslint": "9.33.0",
     "eslint-config-molindo": "8.0.0",
