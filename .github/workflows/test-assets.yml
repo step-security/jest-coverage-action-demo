@@ -34,7 +34,9 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean --skip=publish
+          args: build --clean
+        env:
+          GORELEASER_CURRENT_TAG: ${{ github.event.inputs.tag }}
 
       - name: Debug dist outputs
         run: |
