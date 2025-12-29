@@ -5,7 +5,7 @@ token=${GH_SETUP_GITHUB_TOKEN}
 if [ -z "${token}" ]; then
   token=${GITHUB_TOKEN}
 fi
-repo="k1LoW/gh-setup" #k1LoW will be replaced with step-security post release
+repo="step-security/gh-setup" #k1LoW will be replaced with step-security post release
 tag=${GH_SETUP_GH_SETUP_VERSION}
 if [ -z "${tag}" ]; then
     tag="$(curl -sL -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${token}" https://api.github.com/repos/${repo}/releases/latest | grep tag_name | awk -F':' '{print $2}' | awk -F'\"' '{print $2}')"
@@ -49,7 +49,7 @@ elif uname -a | grep Linux > /dev/null; then
 fi
 
 # download
-curl -sL -o ${bin} https://github.com/k1LoW/gh-setup/releases/download/${tag}/${exe} #k1LoW will be replaced with step-security post release
+curl -sL -o ${bin} https://github.com/step-security/gh-setup/releases/download/${tag}/${exe} #k1LoW will be replaced with step-security post release
 chmod +x ${bin}
 ${bin} version
 echo "bin=${bin}" >> ${GITHUB_OUTPUT}
