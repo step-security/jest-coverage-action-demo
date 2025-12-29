@@ -6,7 +6,6 @@ on:
       tag:
         description: "Tag for the release"
         required: true
-      
 
 permissions:
   contents: read
@@ -50,9 +49,28 @@ jobs:
 
       - name: Upload assets to existing release
         run: |
-          # Upload all built binaries to the existing release
-          find dist/ -name "*gh-setup*" -type f | while read file; do
-            gh release upload "${{ github.event.inputs.tag }}" "$file"
+          # Upload all built binaries to the existing release with proper names
+          for file in dist/*/gh-setup*; do
+            if [ -f "$file" ]; then
+              # Extract directory name to create proper filename
+              dir=$(basename $(dirname "$file"))
+              filename=$(basename "$file")
+              # Create proper name based on directory
+              if [[ "$dir" == *"linux_amd64"* ]]; then
+                newname="gh-setup_v${{ github.event.inputs.tag }}_linux_amd64"
+              elif [[ "$dir" == *"linux_arm64"* ]]; then
+                newname="gh-setup_v${{ github.event.inputs.tag }}_linux_arm64"
+              elif [[ "$dir" == *"darwin_amd64"* ]]; then
+                newname="gh-setup_v${{ github.event.inputs.tag }}_darwin_amd64"
+              elif [[ "$dir" == *"darwin_arm64"* ]]; then
+                newname="gh-setup_v${{ github.event.inputs.tag }}_darwin_arm64"
+              elif [[ "$dir" == *"windows_amd64"* ]]; then
+                newname="gh-setup_v${{ github.event.inputs.tag }}_windows_amd64.exe"
+              else
+                newname="$filename"
+              fi
+              gh release upload "${{ github.event.inputs.tag }}" "$file#$newname" --clobber
+            fi
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
