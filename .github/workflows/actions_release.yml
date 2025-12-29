@@ -57,10 +57,7 @@ jobs:
           TAG="${{ github.event.inputs.tag }}"
           VERSION="${TAG#v}"
 
-          echo "---- dist files ----"
-          find dist -type f | sort
-
-          echo "---- uploading required binaries ----"
+          echo "Uploading required gh-setup binaries..."
           find dist -type f \
             \( -name "gh-setup_v${VERSION}_linux_amd64" \
             -o -name "gh-setup_v${VERSION}_linux_arm64" \
