@@ -52,18 +52,26 @@ jobs:
           echo "==== dist tree ===="
           find dist -type f
 
-      - name: Upload required binaries to existing release
+      - name: Prepare required binaries
         run: |
           TAG="${{ github.event.inputs.tag }}"
           VERSION="${TAG#v}"
 
-          echo "Uploading required gh-setup binaries..."
-          find dist -type f \
-            \( -name "gh-setup_v${VERSION}_linux_amd64" \
-            -o -name "gh-setup_v${VERSION}_linux_arm64" \
-            -o -name "gh-setup_v${VERSION}_darwin_amd64" \
-            -o -name "gh-setup_v${VERSION}_darwin_arm64" \
-            -o -name "gh-setup_v${VERSION}_windows_amd64.exe" \) \
-            -print -exec gh release upload "$TAG" {} --clobber \;
+          cp dist/gh-setup-linux_linux_amd64_v1/gh-setup dist/gh-setup_v${VERSION}_linux_amd64
+          cp dist/gh-setup-linux_linux_arm64_v8.0/gh-setup dist/gh-setup_v${VERSION}_linux_arm64
+          cp dist/gh-setup-darwin_darwin_amd64_v1/gh-setup dist/gh-setup_v${VERSION}_darwin_amd64
+          cp dist/gh-setup-darwin_darwin_arm64_v8.0/gh-setup dist/gh-setup_v${VERSION}_darwin_arm64
+          cp dist/gh-setup-windows_windows_amd64_v1/gh-setup.exe dist/gh-setup_v${VERSION}_windows_amd64.exe
+
+      - name: Upload required binaries to release
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          VERSION="${TAG#v}"
+
+          gh release upload "$TAG" dist/gh-setup_v${VERSION}_linux_amd64 --clobber
+          gh release upload "$TAG" dist/gh-setup_v${VERSION}_linux_arm64 --clobber
+          gh release upload "$TAG" dist/gh-setup_v${VERSION}_darwin_amd64 --clobber
+          gh release upload "$TAG" dist/gh-setup_v${VERSION}_darwin_arm64 --clobber
+          gh release upload "$TAG" dist/gh-setup_v${VERSION}_windows_amd64.exe --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
