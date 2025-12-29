@@ -24,7 +24,7 @@ jobs:
 
   assets:
     needs: release
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -39,9 +39,18 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Upload assets to release
+      - name: Build assets with GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: build --clean
+
+      - name: Upload assets to existing release
         run: |
-          go build -o gh-setup ./cmd/gh-setup
-          gh release upload "${{ github.event.inputs.tag }}" gh-setup
+          # Upload all built binaries to the existing release
+          find dist/ -name "*gh-setup*" -type f | while read file; do
+            gh release upload "${{ github.event.inputs.tag }}" "$file"
+          done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
