@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -e
+
+# Get extension repository path
+extPath="$(dirname "$0")"
+
+# Get latest version
+cd "${extPath}" > /dev/null
+ver="$(git tag | grep ^v | sort --version-sort | tail -1)"
+if [ "${ver}" = "" ]; then
+  git fetch --tags > /dev/null 2>&1
+  ver="$(git tag | grep ^v | sort --version-sort | tail -1)"
+fi
+cd - > /dev/null
+
+# Get arch
+arch="$(uname -m)"
+
+# Get binary file name
+exe="gh-setup" # default
+if uname -a | grep Msys > /dev/null; then
+  if [ "${arch}" = "x86_64" ]; then
+    exe="gh-setup_${ver}_windows_amd64.exe"
+  fi
+elif uname -a | grep Darwin > /dev/null; then
+  if [ "${arch}" = "x86_64" ]; then
+    exe="gh-setup_${ver}_darwin_amd64"
+  elif [ "${arch}" = "arm64" ]; then
+    exe="gh-setup_${ver}_darwin_arm64"
+  fi
+elif uname -a | grep Linux > /dev/null; then
+  if [ "${arch}" = "x86_64" ]; then
+    exe="gh-setup_${ver}_linux_amd64"
+  elif [ "${arch}" = "arm64" ] || [ "${arch}" = "aarch64" ]; then
+    exe="gh-setup_${ver}_linux_arm64"
+  fi
+fi
+
+# Cleanup bin/ dir
+rm -f "${extPath}/bin/*"
+mkdir -p "${extPath}/bin"
+
+binPath="${extPath}/bin/${exe}"
+
+if [ "${exe}" == "gh-setup" ]; then
+  # Build binary
+  if [ "$(which go)" = "" ]; then
+    echo "go must be installed to use this gh extension on this platform"
+    exit 1
+  fi
+
+  exe="cmd.out"
+
+  cd "${extPath}" > /dev/null
+  go build -o "${binPath}"
+  cd - > /dev/null
+else
+  # Download release binary
+  if [[ ! -x "${binPath}" ]]; then
+    if [ "$(which curl)" = "" ]; then
+      echo "curl must be installed to use this gh extension on this platform"
+      exit 1
+    fi
+    curl -sL -o "${binPath}" "https://github.com/k1LoW/gh-setup/releases/download/${ver}/${exe}" #k1LoW will be replaced with step-security post release
+  fi
+fi
+chmod +x "${binPath}"
+
+exec "${binPath}" "$@"

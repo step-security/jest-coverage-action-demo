@@ -1,0 +1,135 @@
+name: build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  job-test:
+    name: Test
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+
+      - name: Check out source code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run lint
+        uses: step-security/action-golangci-lint@4d3d0630d31ce622dc13dc7b19a49fe58a10524f # main
+        with:
+          fail_level: warning
+          go_version_file: go.mod
+
+      - name: Run tests
+        run: make ci
+
+      - name: Run octocov
+        # replace with step-security/octocov-action once released
+        uses: k1LoW/octocov-action@73d561f65d59e66899ed5c87e4621a913b5d5c20 # v1.5.0
+
+  job-run-test:
+    name: Setup test
+    strategy:
+      matrix:
+        os: ${{ github.actor == 'dependabot[bot]' && fromJSON('["ubuntu-latest"]') || fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') }}
+    runs-on: ${{ matrix.os }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DEBUG: true
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+
+      - name: Check out source code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run setup test
+        run: |
+          go run cmd/gh-setup/main.go --repo k1LoW/colr --version v1.1.1 --force
+          colr -v
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get latest version
+        id: latest_version
+        run: |
+          echo -n 'version=' > $GITHUB_OUTPUT
+          gh release list --exclude-drafts --exclude-pre-releases --limit 1 | cut -f 1 >> $GITHUB_OUTPUT
+          cat $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Run setup as a action (1/2)
+        uses: ./
+        with:
+          repo: k1LoW/tbls
+          force: true
+          strict: true
+          gh-setup-version: ${{ steps.latest_version.outputs.version }}
+
+      - name: Run setup as a action (2/2)
+        run: tbls version
+        shell: bash
+
+  job-on-container-test:
+    name: Test on container
+    runs-on: ubuntu-latest
+    container:
+      image: debian:latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DEBUG: true
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Set up gh-setup
+        uses: ./
+        with:
+          repo: cli/cli
+          bin-match: bin/gh$
+          match: tar.gz$
+
+      - name: Get latest version
+        id: latest_version
+        run: |
+          echo -n 'version=' > $GITHUB_OUTPUT
+          gh release list --limit 1 | cut -f 1 >> $GITHUB_OUTPUT
+          cat $GITHUB_OUTPUT
+
+      - name: Run setup as a action (1/2)
+        uses: ./
+        with:
+          repo: k1LoW/tbls
+          version: v1.84.0
+          os: linux
+          arch: amd64
+          checksum: 83f35a07fd2a00c2aa360a47edca6d261f5208186911977eff39097151fc57d5
+          force: true
+          strict: true
+          gh-setup-version: ${{ steps.latest_version.outputs.version }}
+
+      - name: Run setup as a action (2/2)
+        run: tbls version
+        shell: bash

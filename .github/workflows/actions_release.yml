@@ -6,6 +6,7 @@ on:
       tag:
         description: "Tag for the release"
         required: true
+      
 
 permissions:
   contents: read
@@ -16,6 +17,31 @@ jobs:
       actions: read
       id-token: write
       contents: write
+
     uses: step-security/reusable-workflows/.github/workflows/actions_release.yaml@v1
     with:
       tag: "${{ github.event.inputs.tag }}"
+
+  assets:
+    needs: release
+    runs-on: macos-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Upload assets to release
+        run: |
+          go build -o gh-setup .
+          gh release upload "${{ github.event.inputs.tag }}" gh-setup
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
