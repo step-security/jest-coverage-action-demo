@@ -41,7 +41,7 @@ jobs:
 
       - name: Upload assets to release
         run: |
-          go build -o gh-setup .
+          go build -o gh-setup ./cmd/gh-setup
           gh release upload "${{ github.event.inputs.tag }}" gh-setup
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
